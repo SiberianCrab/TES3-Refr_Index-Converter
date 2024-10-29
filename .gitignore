@@ -1,13 +1,13 @@
 
 # Ignore thumbnails created by windows
 Thumbs.db
+
 # Visual Studio specific
 .vs/
 *.vcxproj.user
 *.aps
 *.sdf
 *.ipch
-*.db
 *.opendb
 *.tlog
 *.lastbuildstate
