@@ -1,0 +1,22 @@
+
+# Ignore thumbnails created by windows
+Thumbs.db
+# Visual Studio specific
+.vs/
+*.vcxproj.user
+*.aps
+*.sdf
+*.ipch
+*.db
+*.opendb
+*.tlog
+*.lastbuildstate
+
+# Build directories
+/x64/
+/Debug/
+/Release/
+/TES3 Ref.1F19A3B2/
+
+# Other temporary files
+*.log
