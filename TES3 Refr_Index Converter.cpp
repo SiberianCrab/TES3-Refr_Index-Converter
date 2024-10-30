@@ -24,6 +24,16 @@ void logMessage(const std::string& message) {
     std::cout << message << std::endl;
 }
 
+// Unified error handling
+void logErrorAndExit(sqlite3* db, const std::string& message) {
+    logMessage(message);
+    if (db) {
+        sqlite3_close(db);
+    }
+    std::system("pause");
+    throw std::runtime_error(message);
+}
+
 // Function to clear the log file
 void clearLogFile(const std::string& logFileName) {
     if (std::filesystem::exists(logFileName)) {
@@ -257,27 +267,20 @@ int main() {
 
     // Check if the database file exists
     if (!std::filesystem::exists("tes3_ru-en_refr_index.db")) {
-        logMessage("Database file 'tes3_ru-en_refr_index.db' not found.\n");
-        std::system("pause");
-        return 1; // Exit if the database file is not found
+        logErrorAndExit(nullptr, "Database file 'tes3_ru-en_refr_index.db' not found.\n");
     }
 
-    sqlite3* db;
+    sqlite3* db = nullptr;
+
     // Open the SQLite database
     if (sqlite3_open("tes3_ru-en_refr_index.db", &db)) {
-        logMessage("Failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n");
-        sqlite3_close(db); // Close the database connection
-        std::system("pause");
-        return 1; // Exit if unable to open the database
+        logErrorAndExit(db, "Failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n");
     }
     logMessage("Database opened successfully...");
 
     // Check if the conversion tool executable exists
     if (!std::filesystem::exists("tes3conv.exe")) {
-        logMessage("tes3conv.exe not found. Please download the latest version from\nhttps://github.com/Greatness7/tes3conv/releases and place it in\nthe same directory as this program.\n");
-        sqlite3_close(db); // Close the database connection
-        std::system("pause");
-        return 1; // Exit if the conversion tool is not found
+        logErrorAndExit(db, "tes3conv.exe not found. Please download the latest version from\nhttps://github.com/Greatness7/tes3conv/releases and place it in\nthe same directory as this program.\n");
     }
     logMessage("tes3conv.exe found.\n");
 
@@ -293,10 +296,7 @@ int main() {
     std::string jsonFilePath = (outputDir / inputPath.stem()).string() + ".json"; // Construct the JSON file path
     std::string command = "tes3conv.exe \"" + inputFilePath + "\" \"" + jsonFilePath + "\""; // Command to convert to JSON
     if (std::system(command.c_str()) != 0) {
-        logMessage("Error converting to JSON. Check tes3conv.exe and the input file.");
-        sqlite3_close(db); // Close the database connection
-        std::system("pause");
-        return 1; // Exit on conversion failure
+        logErrorAndExit(db, "Error converting to JSON. Check tes3conv.exe and the input file.\n");
     }
     logMessage("Conversion to JSON successful: " + jsonFilePath);
 
@@ -307,10 +307,7 @@ int main() {
 
     // Check dependencies in the JSON header
     if (!checkDependencyOrder(inputData)) {
-        logMessage("Required Parent Masters not found or in the wrong order. Aborting process...\n");
-        sqlite3_close(db); // Close the database connection
-        std::system("pause");
-        return 1; // Exit if dependencies are invalid
+        logErrorAndExit(db, "Required Parent Masters not found or in the wrong order.\n");
     }
 
     // Regex to find JSON objects containing mast_index
@@ -329,10 +326,7 @@ int main() {
 
     // Check if any replacements were made
     if (replacements.empty()) {
-        logMessage("No replacements found. Conversion canceled.\n");
-        sqlite3_close(db); // Close the database connection
-        std::system("pause");
-        return 0; // Exit if no replacements were found
+        logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
     }
 
     // Use the optimized replacement function to modify the JSON
@@ -343,9 +337,7 @@ int main() {
     // Save the modified JSON data to a new file
     std::string newJsonFilePath = (outputDir / ("CONV_" + std::string(conversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json")).string();
     if (!saveJsonToFile(newJsonFilePath, outputData)) {
-        sqlite3_close(db); // Close the database connection on failure
-        std::system("pause");
-        return 1; // Exit if saving JSON fails
+        logErrorAndExit(db, "Error saving modified JSON file.\n");
     }
 
     // Converting all JSON objects back to .esp or .esm
@@ -354,9 +346,7 @@ int main() {
 
     // Perform conversion from JSON back to ESP/ESM
     if (!convertJsonToEsp(newJsonFilePath, newEspPath)) {
-        sqlite3_close(db); // Close the database connection on failure
-        std::system("pause");
-        return 1; // Exit if conversion fails
+        logErrorAndExit(db, "Error converting JSON back to ESM/ESP.\n");
     }
 
     sqlite3_close(db); // Close the database connection
