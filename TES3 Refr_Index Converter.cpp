@@ -1,12 +1,13 @@
 #include <iostream>
-#include <fstream>
-#include <string>
-#include <regex>
-#include <sqlite3.h>
+#include <cctype>
 #include <filesystem>
-#include <unordered_map>
-#include <unordered_set>
+#include <fstream>
+#include <regex>
+#include <string>
 #include <sstream>
+#include <unordered_map> 
+#include <unordered_set> 
+#include <sqlite3.h> 
 
 // Program info
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
@@ -34,6 +35,40 @@ void clearLogFile(const std::string& logFileName) {
             logMessage("Error clearing log file: " + std::string(e.what()));
         }
     }
+}
+
+// Function to get the user's choice for conversion direction
+int getConversionChoice() {
+    int choice;
+    while (true) {
+        std::cout << "Convert a plugin or master file:\n1. Russian 1C to English GOTY\n2. English GOTY to Russian 1C\nChoice: ";
+        std::string input;
+        std::getline(std::cin, input);
+
+        if (input == "1" || input == "2") {
+            choice = input[0] - '0'; // Convert char to int
+            break; // Exit loop on valid input
+        }
+        logMessage("Invalid choice. Enter 1 or 2."); // Log error for invalid input
+    }
+    return choice;
+}
+
+// Function to get the file path from the user
+std::string getInputFilePath() {
+    std::string filePath;
+    while (true) {
+        std::cout << "Enter the ESP/ESM full path (including extension), or filename (with extension)\nif it's in the same folder as this converter: ";
+        std::getline(std::cin, filePath);
+
+        if (std::filesystem::exists(filePath) &&
+            (filePath.ends_with(".esp") || filePath.ends_with(".esm"))) {
+            logMessage("File found: " + filePath);
+            break; // Exit loop on valid file input
+        }
+        logMessage("File not found or incorrect extension."); // Log error for invalid input
+    }
+    return filePath;
 }
 
 // Function to check the order of dependencies in the JSON header
@@ -231,6 +266,7 @@ int main() {
     // Open the SQLite database
     if (sqlite3_open("tes3_ru-en_refr_index.db", &db)) {
         logMessage("Failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n");
+        sqlite3_close(db); // Close the database connection
         std::system("pause");
         return 1; // Exit if unable to open the database
     }
@@ -239,40 +275,26 @@ int main() {
     // Check if the conversion tool executable exists
     if (!std::filesystem::exists("tes3conv.exe")) {
         logMessage("tes3conv.exe not found. Please download the latest version from\nhttps://github.com/Greatness7/tes3conv/releases and place it in\nthe same directory as this program.\n");
+        sqlite3_close(db); // Close the database connection
         std::system("pause");
         return 1; // Exit if the conversion tool is not found
     }
     logMessage("tes3conv.exe found.\n");
 
-    int conversionChoice;
     // User choice for conversion direction
-    while (true) {
-        std::cout << "Convert a plugin or master file:\n1. Russian 1C to English GOTY\n2. English GOTY to Russian 1C\nChoice: ";
-        std::cin >> conversionChoice;
-        if (conversionChoice == 1 || conversionChoice == 2) break; // Exit loop on valid input
-        logMessage("Invalid choice. Enter 1 or 2.");
-    }
-    std::cin.ignore(); // Ignore the newline character left in the input buffer
+    int conversionChoice = getConversionChoice();
 
-    std::string inputFilePath;
     // User input for the file path of the plugin or master file
-    while (true) {
-        std::cout << "Enter the ESP/ESM full path (including extension), or filename (with extension)\nif it's in the same folder as this converter: ";
-        std::getline(std::cin, inputFilePath);
-        if (std::filesystem::exists(inputFilePath) &&
-            (inputFilePath.ends_with(".esp") || inputFilePath.ends_with(".esm"))) {
-            logMessage("File found: " + inputFilePath);
-            break; // Exit loop on valid file input
-        }
-        logMessage("File not found or incorrect extension."); // Log error for invalid input
-    }
+    std::string inputFilePath = getInputFilePath();
 
+    // Converting all .esp or .esm objects to JSON
     std::filesystem::path inputPath(inputFilePath);
     std::filesystem::path outputDir = inputPath.parent_path(); // Get the directory of the input file
     std::string jsonFilePath = (outputDir / inputPath.stem()).string() + ".json"; // Construct the JSON file path
     std::string command = "tes3conv.exe \"" + inputFilePath + "\" \"" + jsonFilePath + "\""; // Command to convert to JSON
     if (std::system(command.c_str()) != 0) {
         logMessage("Error converting to JSON. Check tes3conv.exe and the input file.");
+        sqlite3_close(db); // Close the database connection
         std::system("pause");
         return 1; // Exit on conversion failure
     }
@@ -285,7 +307,7 @@ int main() {
 
     // Check dependencies in the JSON header
     if (!checkDependencyOrder(inputData)) {
-        logMessage("Required Parent Masters not found or in the wrong order. Aborting process...");
+        logMessage("Required Parent Masters not found or in the wrong order. Aborting process...\n");
         sqlite3_close(db); // Close the database connection
         std::system("pause");
         return 1; // Exit if dependencies are invalid
@@ -304,6 +326,14 @@ int main() {
 
     // Process all JSON objects and store replacements
     std::unordered_map<int, int> replacements = processJsonObjects(db, query, inputData);
+
+    // Check if any replacements were made
+    if (replacements.empty()) {
+        logMessage("No replacements found. Conversion canceled.\n");
+        sqlite3_close(db); // Close the database connection
+        std::system("pause");
+        return 0; // Exit if no replacements were found
+    }
 
     // Use the optimized replacement function to modify the JSON
     std::ostringstream outputStream; // Prepare an output stream for the modified JSON
@@ -330,7 +360,7 @@ int main() {
     }
 
     sqlite3_close(db); // Close the database connection
-    logMessage("Process complete.\n"); // Log completion
+    logMessage("Conversion complete.\n"); // Log completion
     std::system("pause");
     return 0; // Return success
 }
