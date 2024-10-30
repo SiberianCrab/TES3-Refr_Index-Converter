@@ -1,13 +1,14 @@
-#include <iostream>
-#include <cctype>
-#include <filesystem>
-#include <fstream>
-#include <regex>
-#include <string>
-#include <sstream>
-#include <unordered_map> 
-#include <unordered_set> 
-#include <sqlite3.h> 
+#include <cctype>               // C Standard Library
+#include <filesystem>           // C++ Standard Library
+#include <fstream>              // C++ Standard Library
+#include <iostream>             // C++ Standard Library
+#include <limits>               // C++ Standard Library
+#include <regex>                // C++ Standard Library
+#include <sstream>              // C++ Standard Library
+#include <string>               // C++ Standard Library
+#include <unordered_map>        // C++ Standard Library
+#include <unordered_set>        // C++ Standard Library
+#include <sqlite3.h>            // Third-party Library
 
 // Program info
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
@@ -26,12 +27,13 @@ void logMessage(const std::string& message) {
 
 // Unified error handling
 void logErrorAndExit(sqlite3* db, const std::string& message) {
-    logMessage(message);
+    logMessage(message); // Log the error message
     if (db) {
-        sqlite3_close(db);
+        sqlite3_close(db); // Close the database if it's open
     }
-    std::system("pause");
-    throw std::runtime_error(message);
+    std::cout << "Press Enter to continue..."; // Prompt the user
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Wait for Enter key press
+    throw std::runtime_error(message); // Throw an exception with the error message
 }
 
 // Function to clear the log file
@@ -349,6 +351,7 @@ int main() {
 
     sqlite3_close(db); // Close the database connection
     logMessage("Conversion complete.\n"); // Log completion
-    std::system("pause");
+    std::cout << "Press Enter to continue...";
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     return 0; // Return success
 }
