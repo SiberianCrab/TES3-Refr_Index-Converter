@@ -21,7 +21,11 @@ std::unordered_set<int> validMastIndices;
 // Unified logging function
 void logMessage(const std::string& message) {
     std::ofstream logFile("tes3ric_log.txt", std::ios_base::app);
-    logFile << message << std::endl;
+    if (logFile.is_open()) {
+        logFile << message << std::endl;
+    } else {
+        std::cerr << "Failed to open log file." << std::endl;
+    }
     std::cout << message << std::endl;
 }
 
@@ -37,7 +41,7 @@ void logErrorAndExit(sqlite3* db, const std::string& message) {
 }
 
 // Function to clear the log file
-void clearLogFile(const std::string& logFileName) {
+void clearLogFile(const std::filesystem::path& logFileName) {
     if (std::filesystem::exists(logFileName)) {
         try {
             std::filesystem::remove(logFileName);
@@ -67,15 +71,17 @@ int getConversionChoice() {
 }
 
 // Function to get the file path from the user
-std::string getInputFilePath() {
-    std::string filePath;
+std::filesystem::path getInputFilePath() {
+    std::filesystem::path filePath;
     while (true) {
         std::cout << "Enter the ESP/ESM full path (including extension), or filename (with extension)\nif it's in the same folder as this converter: ";
-        std::getline(std::cin, filePath);
+        std::string input;
+        std::getline(std::cin, input);
+        filePath = input; // Convert input to path
 
         if (std::filesystem::exists(filePath) &&
-            (filePath.ends_with(".esp") || filePath.ends_with(".esm"))) {
-            logMessage("File found: " + filePath);
+            (filePath.extension() == ".esp" || filePath.extension() == ".esm")) {
+            logMessage("File found: " + filePath.string());
             break; // Exit loop on valid file input
         }
         logMessage("File not found or incorrect extension."); // Log error for invalid input
@@ -235,12 +241,12 @@ std::unordered_map<int, int> processJsonObjects(sqlite3* db, const std::string& 
 }
 
 // Function to save modified JSON to a file
-bool saveJsonToFile(const std::string& jsonFilePath, const std::string& outputData) {
+bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string& outputData) {
     std::ofstream outputFile(jsonFilePath);
     if (outputFile.is_open()) {
         outputFile << outputData; // Write data to the file
         outputFile.close();
-        logMessage("Modified JSON saved as: " + jsonFilePath);
+        logMessage("Modified JSON saved as: " + jsonFilePath.string());
         return true;
     }
     else {
@@ -249,12 +255,12 @@ bool saveJsonToFile(const std::string& jsonFilePath, const std::string& outputDa
 }
 
 // Function to convert JSON back to ESM/ESP
-bool convertJsonToEsp(const std::string& jsonFilePath, const std::string& espFilePath) {
-    std::string command = "tes3conv.exe \"" + jsonFilePath + "\" \"" + espFilePath + "\""; // Command to run
+bool convertJsonToEsp(const std::filesystem::path& jsonFilePath, const std::filesystem::path& espFilePath) {
+    std::string command = "tes3conv.exe \"" + jsonFilePath.string() + "\" \"" + espFilePath.string() + "\""; // Command to run
     if (std::system(command.c_str()) != 0) {
         return false; // Return false if conversion fails
     }
-    logMessage("Final conversion to ESM/ESP successful: " + espFilePath);
+    logMessage("Final conversion to ESM/ESP successful: " + espFilePath.string());
     return true; // Conversion succeeded
 }
 
@@ -266,21 +272,24 @@ int main() {
     clearLogFile("tes3ric_log.txt");
 
     // Check if the database file exists
-    if (!std::filesystem::exists("tes3_ru-en_refr_index.db")) {
+    std::filesystem::path dbFilePath = "tes3_ru-en_refr_index.db";
+    if (!std::filesystem::exists(dbFilePath)) {
         logErrorAndExit(nullptr, "Database file 'tes3_ru-en_refr_index.db' not found.\n");
     }
 
     sqlite3* db = nullptr;
 
     // Open the SQLite database
-    if (sqlite3_open("tes3_ru-en_refr_index.db", &db)) {
+    if (sqlite3_open(dbFilePath.string().c_str(), &db)) {
         logErrorAndExit(db, "Failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n");
     }
     logMessage("Database opened successfully...");
 
     // Check if the conversion tool executable exists
-    if (!std::filesystem::exists("tes3conv.exe")) {
-        logErrorAndExit(db, "tes3conv.exe not found. Please download the latest version from\nhttps://github.com/Greatness7/tes3conv/releases and place it in\nthe same directory as this program.\n");
+    std::filesystem::path converterPath = "tes3conv.exe";
+    if (!std::filesystem::exists(converterPath)) {
+        logErrorAndExit(db, "tes3conv.exe not found. Please download the latest version from\n"
+            "https://github.com/Greatness7/tes3conv/releases and place it in\nthe same directory as this program.\n");
     }
     logMessage("tes3conv.exe found.\n");
 
@@ -288,20 +297,23 @@ int main() {
     int conversionChoice = getConversionChoice();
 
     // User input for the file path of the plugin or master file
-    std::string inputFilePath = getInputFilePath();
+    std::filesystem::path inputFilePath = getInputFilePath(); // Use filesystem path directly
+    std::filesystem::path inputPath(inputFilePath); // Declare inputPath
 
     // Converting all .esp or .esm objects to JSON
-    std::filesystem::path inputPath(inputFilePath);
     std::filesystem::path outputDir = inputPath.parent_path(); // Get the directory of the input file
-    std::string jsonFilePath = (outputDir / inputPath.stem()).string() + ".json"; // Construct the JSON file path
-    std::string command = "tes3conv.exe \"" + inputFilePath + "\" \"" + jsonFilePath + "\""; // Command to convert to JSON
+    std::filesystem::path jsonFilePath = outputDir / (inputPath.stem() += ".json"); // Construct the JSON file path
+    std::string command = "tes3conv.exe \"" + inputPath.string() + "\" \"" + jsonFilePath.string() + "\""; // Command to convert to JSON
     if (std::system(command.c_str()) != 0) {
         logErrorAndExit(db, "Error converting to JSON. Check tes3conv.exe and the input file.\n");
     }
-    logMessage("Conversion to JSON successful: " + jsonFilePath);
+    logMessage("Conversion to JSON successful: " + jsonFilePath.string());
 
     // Read the JSON data from the file
     std::ifstream inputFile(jsonFilePath);
+    if (!inputFile) {
+        logErrorAndExit(db, "Failed to open JSON file for reading: " + jsonFilePath.string() + "\n");
+    }
     std::string inputData((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
     inputFile.close(); // Close the input file
 
@@ -316,6 +328,7 @@ int main() {
 
     auto it = std::sregex_iterator(inputData.begin(), inputData.end(), jsonObjectRegex); // Start regex search
     auto end = std::sregex_iterator();
+
     // Prepare SQL query based on conversion choice
     std::string query = (conversionChoice == 1) ?
         "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
@@ -335,14 +348,14 @@ int main() {
     outputData = outputStream.str(); // Get the modified data
 
     // Save the modified JSON data to a new file
-    std::string newJsonFilePath = (outputDir / ("CONV_" + std::string(conversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json")).string();
+    std::filesystem::path newJsonFilePath = outputDir / ("CONV_" + std::string(conversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json");
     if (!saveJsonToFile(newJsonFilePath, outputData)) {
         logErrorAndExit(db, "Error saving modified JSON file.\n");
     }
 
     // Converting all JSON objects back to .esp or .esm
-    std::string outputExtension = inputPath.extension() == ".esp" ? ".esp" : ".esm"; // Determine output extension
-    std::string newEspPath = (outputDir / ("CONV_" + std::string(conversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + outputExtension)).string(); // Construct output file path
+    std::filesystem::path outputExtension = inputPath.extension(); // Get the original extension for output
+    std::filesystem::path newEspPath = outputDir / ("CONV_" + std::string(conversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + outputExtension.string()); // Construct output file path
 
     // Perform conversion from JSON back to ESP/ESM
     if (!convertJsonToEsp(newJsonFilePath, newEspPath)) {
