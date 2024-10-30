@@ -90,7 +90,7 @@ bool checkDependencyOrder(const std::string& inputData) {
 
     // Check if Morrowind is found
     if (mwPos == std::string::npos) {
-        logMessage("Error: Morrowind.esm not found.");
+        logMessage("Morrowind.esm not found.");
         return false;
     }
 
@@ -105,7 +105,7 @@ bool checkDependencyOrder(const std::string& inputData) {
             validMastIndices.insert(3); // Bloodmoon
         }
         else {
-            logMessage("Invalid order. Tribunal.esm should come before Bloodmoon.esm!");
+            logMessage("Invalid order. Tribunal.esm should come before Bloodmoon.esm.");
             return false;
         }
     }
@@ -242,7 +242,6 @@ bool saveJsonToFile(const std::string& jsonFilePath, const std::string& outputDa
         return true;
     }
     else {
-        logMessage("Error saving JSON file.");
         return false;
     }
 }
@@ -251,7 +250,6 @@ bool saveJsonToFile(const std::string& jsonFilePath, const std::string& outputDa
 bool convertJsonToEsp(const std::string& jsonFilePath, const std::string& espFilePath) {
     std::string command = "tes3conv.exe \"" + jsonFilePath + "\" \"" + espFilePath + "\""; // Command to run
     if (std::system(command.c_str()) != 0) {
-        logMessage("Error converting JSON back to ESM/ESP.");
         return false; // Return false if conversion fails
     }
     logMessage("Final conversion to ESM/ESP successful: " + espFilePath);
