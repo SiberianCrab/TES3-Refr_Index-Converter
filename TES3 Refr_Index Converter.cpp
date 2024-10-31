@@ -192,21 +192,38 @@ int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const st
     return result; // Return the fetched index
 }
 
-// Function to fetch the dbId corresponding to the given refrIndex from the database
-std::string fetchDbId(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_set<int>& validMastersDB, int ConversionChoice) {
+enum FetchMode {
+    FETCH_DB_ID,
+    FETCH_OPPOSITE_REFR_INDEX
+};
+
+// Combined function to fetch either dbId or opposite refr_index based on FetchMode
+template <FetchMode mode>
+auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_set<int>& validMastersDB, int ConversionChoice) {
     std::string query;
 
-    // Prepare SQL query to fetch the dbId based on ConversionChoice
+    // Prepare SQL query based on ConversionChoice
     switch (ConversionChoice) {
     case 1: // Russian to English
-        query = "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?";
+        if constexpr (mode == FETCH_DB_ID) {
+            query = "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?";
+        }
+        else { // FETCH_OPPOSITE_REFR_INDEX
+            query = "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?";
+        }
         break;
     case 2: // English to Russian
-        query = "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?";
+        if constexpr (mode == FETCH_DB_ID) {
+            query = "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?";
+        }
+        else { // FETCH_OPPOSITE_REFR_INDEX
+            query = "SELECT refr_index_RU FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?";
+        }
         break;
     default:
         std::cerr << "Invalid conversion choice." << std::endl;
-        return ""; // Return empty string if choice is invalid
+        if constexpr (mode == FETCH_DB_ID) return std::string(); // Return empty string if choice is invalid
+        else return -1; // Return -1 if choice is invalid
     }
 
     // Add conditions based on validMastersDB and mastIndex
@@ -229,84 +246,44 @@ std::string fetchDbId(sqlite3* db, int refrIndex, int mastIndex, const std::unor
     // Prepare the statement
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
         std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-        return ""; // Return an empty string in case of error
+        if constexpr (mode == FETCH_DB_ID) return std::string(); // Return an empty string in case of error
+        else return -1; // Return -1 in case of error
     }
 
     // Bind the refrIndex to the query
     sqlite3_bind_int(stmt, 1, refrIndex);
 
-    // Execute the statement and fetch the dbId
-    std::string dbId;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        const char* id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        if (id) {
-            dbId = id; // Directly assign the id to dbId
+    // Execute the statement and fetch the value
+    if constexpr (mode == FETCH_DB_ID) {
+        std::string dbId; // Variable to hold the fetched dbId
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char* id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            if (id) {
+                dbId = id; // Directly assign the id to dbId
+            }
         }
-    }
-    else {
-        std::cerr << "No matching id found for refr_index: " << refrIndex << std::endl;
-    }
-
-    // Finalize the statement to release resources
-    sqlite3_finalize(stmt);
-    return dbId; // Return the fetched dbId (empty string if not found)
-}
-
-// Function to fetch the refr_index_RU or refr_index_EN based on the opposite ConversionChoice
-int fetchOppositeRefrIndex(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_set<int>& validMastersDB, int ConversionChoice) {
-    std::string query;
-
-    // Prepare SQL query to fetch the opposite refr_index based on ConversionChoice
-    switch (ConversionChoice) {
-    case 1: // Russian to English, we want the English refr_index
-        query = "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?";
-        break;
-    case 2: // English to Russian, we want the Russian refr_index
-        query = "SELECT refr_index_RU FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?";
-        break;
-    default:
-        std::cerr << "Invalid conversion choice." << std::endl;
-        return -1; // Return -1 if choice is invalid
-    }
-
-    // Add conditions based on validMastersDB and mastIndex
-    if (validMastersDB.count(1)) {
-        if (mastIndex == 2) {
-            query += " AND Master = 'Tribunal'";
+        else {
+            std::cerr << "No matching id found for refr_index: " << refrIndex << std::endl;
         }
-        else if (mastIndex == 3) {
-            query += " AND Master = 'Bloodmoon'";
+
+        // Finalize the statement to release resources
+        sqlite3_finalize(stmt);
+        return dbId; // Return the fetched dbId (empty string if not found)
+
+    }
+    else { // FETCH_OPPOSITE_REFR_INDEX
+        int oppositeRefrIndex = -1; // Default value if not found
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            oppositeRefrIndex = sqlite3_column_int(stmt, 0); // Get the opposite refr_index
         }
-    }
-    else if (validMastersDB.count(2)) {
-        query += " AND Master = 'Tribunal'";
-    }
-    else if (validMastersDB.count(3)) {
-        query += " AND Master = 'Bloodmoon'";
-    }
+        else {
+            std::cerr << "No matching opposite refr_index found for refr_index: " << refrIndex << std::endl;
+        }
 
-    sqlite3_stmt* stmt;
-    // Prepare the statement
-    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
-        return -1; // Return -1 in case of error
+        // Finalize the statement to release resources
+        sqlite3_finalize(stmt);
+        return oppositeRefrIndex; // Return the fetched opposite refr_index (or -1 if not found)
     }
-
-    // Bind the refrIndex to the query
-    sqlite3_bind_int(stmt, 1, refrIndex);
-
-    // Execute the statement and fetch the opposite refr_index
-    int oppositeRefrIndex = -1; // Default value if not found
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        oppositeRefrIndex = sqlite3_column_int(stmt, 0); // Get the opposite refr_index
-    }
-    else {
-        std::cerr << "No matching opposite refr_index found for refr_index: " << refrIndex << std::endl;
-    }
-
-    // Finalize the statement to release resources
-    sqlite3_finalize(stmt);
-    return oppositeRefrIndex; // Return the fetched opposite refr_index (or -1 if not found)
 }
 
 // Escape special characters for regex matching
@@ -386,18 +363,18 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
 
             if (newRefrIndex != -1) {
                 replacements[refrIndex] = newRefrIndex; // Store the replacement
-                logMessage("Will replace refr_index " + std::to_string(refrIndex) + " with " + std::to_string(newRefrIndex) + " for id: " + id);
+                logMessage("Will replace JSON refr_index " + std::to_string(refrIndex) + " with DB refr_index" + std::to_string(newRefrIndex) + " for JSON id: " + id);
             }
             else {
                 // If refr_index exists in the database but id does not match and mast_index is equal to 2 or 3, add to mismatchedEntries container
                 if (currentMastIndex == 2 || currentMastIndex == 3) {
                     // Fetch the opposite refr_index based on the opposite ConversionChoice
-                    int oppositeRefrIndex = fetchOppositeRefrIndex(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
+                    int oppositeRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
 
                     // Retrieve dbId with required parameters based on mast_index and validMastersDB
-                    std::string dbId = fetchDbId(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
+                    std::string dbId = fetchValue<FETCH_DB_ID>(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
                     mismatchedEntries.emplace_back(refrIndex, id, dbId, oppositeRefrIndex);
-                    logMessage("Mismatch found for json refr_index " + std::to_string(refrIndex) + " with json id: " + id + " and db id: " + dbId + " with opposite refr_index : " + std::to_string(oppositeRefrIndex));
+                    logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndex) + " with JSON id: " + id + " with DB refr_index : " + std::to_string(oppositeRefrIndex) + " with DB id: " + dbId);
                 }
             }
         }
@@ -426,11 +403,7 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
 
             if (oppositeRefrIndex != -1) { // Check for validity
                 replacements[refrIndex] = oppositeRefrIndex;
-                logMessage("Mismatch replaced: refr_index " + std::to_string(refrIndex) + " now set to " + std::to_string(oppositeRefrIndex) + " without matching id.");
-
-                // Add console output for the replacement
-                std::cout << "Replaced refr_index " << refrIndex << " with " << oppositeRefrIndex
-                    << " for json id: " << id << " and db id: " << entry.dbId << std::endl;
+                logMessage("Replaced JSON refr_index " + std::to_string(refrIndex) + " with DB refr_index : " + std::to_string(oppositeRefrIndex));
             }
         }
     }
