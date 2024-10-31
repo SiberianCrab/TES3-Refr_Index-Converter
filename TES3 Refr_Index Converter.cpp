@@ -415,24 +415,10 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
 }
 
 // Function to save modified JSON to a file
-bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::unordered_map<int, int>& replacements, const std::string& originalData) {
-    std::string outputData = originalData; // Start with the original data
-
-    // Apply replacements to outputData
-    for (const auto& [oldRefrIndex, newRefrIndex] : replacements) {
-        // Replace old refr_index with new refr_index in the output data
-        // Assuming outputData is in JSON format and you need to replace the value
-        std::string oldRefrIndexStr = std::to_string(oldRefrIndex);
-        std::string newRefrIndexStr = std::to_string(newRefrIndex);
-
-        // Use regex to replace old refr_index with new refr_index in a safe way
-        std::regex refrIndexRegex(R"("refr_index"\s*:\s*")" + oldRefrIndexStr + R"(")");
-        outputData = std::regex_replace(outputData, refrIndexRegex, "\"refr_index\": \"" + newRefrIndexStr + "\"");
-    }
-
+bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string& outputData) {
     std::ofstream outputFile(jsonFilePath);
     if (outputFile.is_open()) {
-        outputFile << outputData; // Write modified data to the file
+        outputFile << outputData; // Write data to the file
         outputFile.close();
         logMessage("Modified JSON saved as: " + jsonFilePath.string());
         return true;
@@ -538,7 +524,7 @@ int main() {
 
     // Save the modified JSON data to a new file
     std::filesystem::path newJsonFilePath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json");
-    if (!saveJsonToFile(newJsonFilePath, replacements, outputData)) {
+    if (!saveJsonToFile(newJsonFilePath, outputData)) {
         logErrorAndExit(db, "Error saving modified JSON file.\n");
     }
 
