@@ -10,6 +10,7 @@
 #include <unordered_set>        // C++ Standard Library
 #include <vector>               // C++ Standard Library
 #include <sqlite3.h>            // Third-party Library
+#include <optional>
 
 // Program info
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
@@ -24,13 +25,10 @@ std::unordered_set<int> validMastersDB;
 
 // Structure for storing information about mismatches
 struct MismatchEntry {
-    int refrIndex;      // Found refr_index
-    std::string id;     // id from JSON
-    std::string dbId;   // id from the database
-    int oppositeRefrIndex; // Found opposite refr_index
-
-    MismatchEntry(int refIdx, const std::string& jsonId, const std::string& dbIdStr, int oppositeRefIdx)
-        : refrIndex(refIdx), id(jsonId), dbId(dbIdStr), oppositeRefrIndex(oppositeRefIdx) {}
+    int refrIndex;
+    std::string id;
+    std::string dbId;
+    int oppositeRefrIndex;
 };
 
 // Container for storing all mismatches
@@ -89,6 +87,21 @@ int getConversionChoice() {
         logMessage("Invalid choice. Enter 1 or 2."); // Log error for invalid input
     }
     return ConversionChoice;
+}
+
+int getUserChoice() {
+    int choice = 0;
+    while (true) {
+        std::cout << "Found mismatched entries. Would you like to replace their refr_index anyway?\n1. Yes\n2. No\nChoice: ";
+        std::string input;
+        std::getline(std::cin, input);
+        if (input == "1" || input == "2") {
+            choice = std::stoi(input);
+            break; // Exit loop on valid input
+        }
+        logMessage("Invalid choice. Enter 1 or 2."); // Log error for invalid input
+    }
+    return choice;
 }
 
 // Function to get the file path to .esp or .esm from the user
@@ -292,84 +305,87 @@ std::string regexEscape(const std::string& str) {
     return std::regex_replace(str, specialChars, R"(\$&)"); // Escape special characters
 }
 
+// Функция для поиска индекса в JSON-объекте
+std::optional<int> findRefrIndex(const std::string& jsonObject) {
+    std::regex refrIndexRegex(R"(\"refr_index\"\s*:\s*(\d+))");
+    std::smatch match;
+    if (std::regex_search(jsonObject, match, refrIndexRegex)) {
+        return std::stoi(match[1].str());
+    }
+    return std::nullopt;
+}
+
+// Функция для поиска ID в JSON-объекте
+std::optional<std::string> findId(const std::string& jsonObject) {
+    std::regex idRegex(R"(\"id\"\s*:\s*\"([^\"]+)\")");
+    std::smatch match;
+    if (std::regex_search(jsonObject, match, idRegex)) {
+        return match[1].str();
+    }
+    return std::nullopt;
+}
+
 // Function to process JSON objects, fetch replacements from the database, and handle mismatched entries
 // (mismatchs occurs if object in the game world from Tribunal or Bloodmoon was replaced using "Edit -> Search & Replace" in TES3 CS)
-int processAndHandleMismatches(sqlite3* db, const std::string& query, const std::string& inputData, int ConversionChoice, const std::unordered_set<int>& validMastersDB, std::unordered_map<int, int>& replacements) {
-    std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})"); // Regex to match JSON objects
+int processAndHandleMismatches(sqlite3* db, const std::string& query, const std::string& inputData,
+    int conversionChoice, const std::unordered_set<int>& validMastersDB,
+    std::unordered_map<int, int>& replacements,
+    std::vector<MismatchEntry>& mismatchedEntries) {
+    std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
     auto it = std::sregex_iterator(inputData.begin(), inputData.end(), jsonObjectRegex);
     auto end = std::sregex_iterator();
 
-    // Process all JSON objects
+    // Процесс обработки всех JSON объектов
     while (it != end) {
         std::string jsonObject = it->str();
-        std::regex refrIndexRegex(R"(\"refr_index\"\s*:\s*(\d+))"); // Regex for refr_index
-        std::regex idRegex(R"(\"id\"\s*:\s*\"([^\"]+)\")"); // Regex for ID
+        auto refrIndexOpt = findRefrIndex(jsonObject);
+        auto idOpt = findId(jsonObject);
 
-        std::smatch refrIndexMatch, idMatch;
-        // Use std::regex_search to find indices and IDs in each JSON object
-        if (std::regex_search(jsonObject, refrIndexMatch, refrIndexRegex) &&
-            std::regex_search(jsonObject, idMatch, idRegex)) {
-
-            int refrIndex = std::stoi(refrIndexMatch[1].str());
-            std::string id = idMatch[1].str();
-            int currentMastIndex = fetchCurrentMastIndex(jsonObject); // Function to retrieve the current mast_index from jsonObject
-            int newRefrIndex = fetchRefIndex(db, query, refrIndex, id); // Fetch new refr_index
+        if (refrIndexOpt && idOpt) {
+            int refrIndex = *refrIndexOpt;
+            std::string id = *idOpt;
+            int currentMastIndex = fetchCurrentMastIndex(jsonObject);
+            int newRefrIndex = fetchRefIndex(db, query, refrIndex, id);
 
             if (newRefrIndex != -1) {
-                replacements[refrIndex] = newRefrIndex; // Store the replacement
-                logMessage("Will replace JSON refr_index " + std::to_string(refrIndex) + " with DB refr_index" + std::to_string(newRefrIndex) + " for JSON id: " + id);
+                replacements[refrIndex] = newRefrIndex;
+                logMessage("Will replace JSON refr_index " + std::to_string(refrIndex) + " with DB refr_index " + std::to_string(newRefrIndex) + " for JSON id: " + id);
             }
-            else {
-                // If refr_index exists in the database but id does not match and mast_index is equal to 2 or 3, add to mismatchedEntries container
-                if (currentMastIndex == 2 || currentMastIndex == 3) {
-                    // Fetch the opposite refr_index based on the opposite ConversionChoice
-                    int oppositeRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
-
-                    // Retrieve dbId with required parameters based on mast_index and validMastersDB
-                    std::string dbId = fetchValue<FETCH_DB_ID>(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
-                    mismatchedEntries.emplace_back(refrIndex, id, dbId, oppositeRefrIndex);
-                    logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndex) + " with JSON id: " + id + " with DB refr_index : " + std::to_string(oppositeRefrIndex) + " with DB id: " + dbId);
-                }
+            else if (currentMastIndex == 2 || currentMastIndex == 3) {
+                // Обработка несоответствий
+                int oppositeRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndex, currentMastIndex, validMastersDB, conversionChoice);
+                std::string dbId = fetchValue<FETCH_DB_ID>(db, refrIndex, currentMastIndex, validMastersDB, conversionChoice);
+                mismatchedEntries.emplace_back(MismatchEntry{ refrIndex, id, dbId, oppositeRefrIndex });
+                logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndex) + " with JSON id: " + id + " with DB refr_index: " + std::to_string(oppositeRefrIndex) + " with DB id: " + dbId);
             }
         }
         ++it;
     }
 
-    // User selection prompt
-    int mismatchChoice = 0;
-    while (true) {
-        std::cout << "Found mismatched entries. Would you like to replace their refr_index anyway?\n1. Yes\n2. No\nChoice: ";
-        std::string input;
-        std::getline(std::cin, input);
+    // Запрос выбора пользователя
+    int mismatchChoice = getUserChoice();
 
-        if (input == "1" || input == "2") {
-            mismatchChoice = std::stoi(input);  // Convert string to int directly
-            break; // Exit loop on valid input
-        }
-        logMessage("Invalid choice. Enter 1 or 2."); // Log error for invalid input
-    }
-
-    if (mismatchChoice == 1) { // If the user selected 1 (Yes)
+    // Обработка выбора пользователя
+    if (mismatchChoice == 1) { // Если пользователь выбрал 1 (Да)
         for (const auto& entry : mismatchedEntries) {
             int refrIndex = entry.refrIndex;
-            std::string id = entry.id;
-            int oppositeRefrIndex = entry.oppositeRefrIndex; // Use the already gathered value
+            int oppositeRefrIndex = entry.oppositeRefrIndex;
 
-            if (oppositeRefrIndex != -1) { // Check for validity
+            if (oppositeRefrIndex != -1) {
                 replacements[refrIndex] = oppositeRefrIndex;
                 logMessage("Replaced JSON refr_index " + std::to_string(refrIndex) + " with DB refr_index: " + std::to_string(oppositeRefrIndex));
             }
         }
     }
-    else { // If the user selected 2 (No)
+    else {
         logMessage("Mismatched entries will remain unchanged.");
     }
 
-    return mismatchChoice; // Return the user's choice
+    return mismatchChoice; // Возвращаем выбор пользователя
 }
 
 // Optimized function for processing JSON replacements
-void optimizeJsonReplacement(std::ostringstream& outputStream, const std::string& inputData, const std::unordered_map<int, int>& replacements) {
+void optimizeJsonReplacement(std::ostringstream& outputStream, std::string_view inputData, const std::unordered_map<int, int>& replacements) {
     size_t pos = 0, lastPos = 0;
     const std::string mastKey = "\"mast_index\":";
     const std::string refrKey = "\"refr_index\":";
@@ -377,32 +393,26 @@ void optimizeJsonReplacement(std::ostringstream& outputStream, const std::string
     const size_t refrKeyLen = refrKey.length();
 
     while ((pos = inputData.find(mastKey, lastPos)) != std::string::npos) {
-        outputStream << inputData.substr(lastPos, pos - lastPos); // Write data before mast_index
+        outputStream << inputData.substr(lastPos, pos - lastPos);
 
         size_t endPos = inputData.find_first_of(",}", pos);
-        int currentMastIndex = std::stoi(inputData.substr(pos + mastKeyLen, endPos - pos - mastKeyLen));
+        int currentMastIndex = std::stoi(std::string(inputData.substr(pos + mastKeyLen, endPos - pos - mastKeyLen)));
 
         size_t refrIndexPos = inputData.find(refrKey, endPos);
         if (refrIndexPos == std::string::npos) {
-            outputStream << inputData.substr(lastPos); // Write remaining data if no refr_index found
+            outputStream << inputData.substr(lastPos);
             break;
         }
 
         size_t refrEndPos = inputData.find_first_of(",}", refrIndexPos);
-        int currentIndex = std::stoi(inputData.substr(refrIndexPos + refrKeyLen, refrEndPos - refrIndexPos - refrKeyLen));
+        int currentIndex = std::stoi(std::string(inputData.substr(refrIndexPos + refrKeyLen, refrEndPos - refrIndexPos - refrKeyLen)));
 
         outputStream << mastKey << " " << currentMastIndex << ",\n        ";
-        if (validMastIndices.count(currentMastIndex)) {
-            outputStream << refrKey << " " << replacements.at(currentIndex);
-        }
-        else {
-            outputStream << refrKey << " " << currentIndex;
-        }
+        outputStream << refrKey << " " << (replacements.count(currentIndex) ? replacements.at(currentIndex) : currentIndex);
 
         lastPos = refrEndPos;
     }
 
-    // Append remaining data after the last processed entry
     if (lastPos < inputData.size()) {
         outputStream << inputData.substr(lastPos);
     }
@@ -500,15 +510,15 @@ int main() {
         logErrorAndExit(db, "Required Parent Masters not found or in the wrong order.\n");
     }
 
-    // Processing all JSON objects and managing mismatches
-    int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements);
+    // Processing all JSON objects managing replacements & mismatches
+    int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements, mismatchedEntries);
 
     // Check if any replacements were made
     if (replacements.empty()) {
         logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
     }
 
-    // Use the optimized replacement function to modify the JSON
+    // Use the optimized function to modify the JSON
     std::ostringstream outputStream; // Prepare an output stream for the modified JSON
     optimizeJsonReplacement(outputStream, inputData, replacements); // Perform replacements
     outputData = outputStream.str(); // Get the modified data
