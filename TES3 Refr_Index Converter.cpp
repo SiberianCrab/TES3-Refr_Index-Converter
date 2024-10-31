@@ -8,6 +8,7 @@
 #include <string>               // C++ Standard Library
 #include <unordered_map>        // C++ Standard Library
 #include <unordered_set>        // C++ Standard Library
+#include <vector>               // C++ Standard Library
 #include <sqlite3.h>            // Third-party Library
 
 // Program info
@@ -17,6 +18,26 @@ const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 
 // Add a global variable for valid mast_index values
 std::unordered_set<int> validMastIndices;
+
+// Add a global variable for valid Masters for DB search
+std::unordered_set<int> validMastersDB;
+
+// Structure for storing information about mismatches
+struct MismatchEntry {
+    int refrIndex;      // Found refr_index
+    std::string id;     // id from JSON
+    std::string dbId;   // id from the database
+    int oppositeRefrIndex; // Found opposite refr_index
+
+    MismatchEntry(int refIdx, const std::string& jsonId, const std::string& dbIdStr, int oppositeRefIdx)
+        : refrIndex(refIdx), id(jsonId), dbId(dbIdStr), oppositeRefrIndex(oppositeRefIdx) {}
+};
+
+// Container for storing all mismatches
+std::vector<MismatchEntry> mismatchedEntries;
+
+// Container for storing all replacements
+std::unordered_map<int, int> replacements;
 
 // Unified logging function
 void logMessage(const std::string& message) {
@@ -55,19 +76,19 @@ void clearLogFile(const std::filesystem::path& logFileName) {
 
 // Function to get the user's choice for conversion direction
 int getConversionChoice() {
-    int choice;
+    int ConversionChoice;
     while (true) {
         std::cout << "Convert a plugin or master file:\n1. Russian 1C to English GOTY\n2. English GOTY to Russian 1C\nChoice: ";
         std::string input;
         std::getline(std::cin, input);
 
         if (input == "1" || input == "2") {
-            choice = input[0] - '0'; // Convert char to int
+            ConversionChoice = input[0] - '0'; // Convert char to int
             break; // Exit loop on valid input
         }
         logMessage("Invalid choice. Enter 1 or 2."); // Log error for invalid input
     }
-    return choice;
+    return ConversionChoice;
 }
 
 // Function to get the file path from the user
@@ -90,7 +111,7 @@ std::filesystem::path getInputFilePath() {
 }
 
 // Function to check the order of dependencies in the JSON header
-bool checkDependencyOrder(const std::string& inputData) {
+std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const std::string& inputData) {
     // Find positions of the master files
     size_t mwPos = inputData.find("Morrowind.esm");
     size_t tPos = inputData.find("Tribunal.esm");
@@ -99,10 +120,11 @@ bool checkDependencyOrder(const std::string& inputData) {
     // Check if Morrowind is found
     if (mwPos == std::string::npos) {
         logMessage("Morrowind.esm not found.");
-        return false;
+        return { false, {} }; // Return false and empty set
     }
 
     validMastIndices.clear(); // Clearing previous values
+    validMastersDB.clear(); // Clearing previous values
 
     // Verify the order of dependencies
     if (tPos != std::string::npos && bPos != std::string::npos) {
@@ -111,30 +133,45 @@ bool checkDependencyOrder(const std::string& inputData) {
             logMessage("Valid order of Parent Masters found: M+T+B.");
             validMastIndices.insert(2); // Tribunal
             validMastIndices.insert(3); // Bloodmoon
+            validMastersDB.insert(1); // Update for M+T+B
+            return { true, validMastersDB }; // Return valid result and updated db
         }
         else {
             logMessage("Invalid order. Tribunal.esm should come before Bloodmoon.esm.");
-            return false;
+            return { false, {} }; // Invalid order
         }
     }
     else if (tPos != std::string::npos) {
         // Valid combination: M+T
         logMessage("Valid order of Parent Masters found: M+T.");
         validMastIndices.insert(2); // Tribunal
+        validMastersDB.insert(2); // Update for M+T
+        return { true, validMastersDB }; // Return valid result and updated db
     }
     else if (bPos != std::string::npos) {
         // Valid combination: M+B
         logMessage("Valid order of Parent Masters found: M+B.");
-        validMastIndices.insert(2); // Bloodmoon
+        validMastIndices.insert(3); // Bloodmoon
+        validMastersDB.insert(3); // Update for M+B
+        return { true, validMastersDB }; // Return valid result and updated db
     }
     else {
-        return false; // No valid masters found
+        return { false, {} }; // No valid masters found
     }
-
-    return true;
 }
 
-// Helper to fetch refr_index from the database
+// Function to retrieve mast_index from a JSON object
+int fetchCurrentMastIndex(const std::string& jsonObject) {
+    std::regex mastIndexRegex(R"(\"mast_index\"\s*:\s*(\d+))");
+    std::smatch mastIndexMatch;
+
+    if (std::regex_search(jsonObject, mastIndexMatch, mastIndexRegex)) {
+        return std::stoi(mastIndexMatch[1].str());
+    }
+    return -1; // Return -1 if not found
+}
+
+// Function to fetch refr_index from the database
 int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const std::string& id) {
     int result = -1;
     sqlite3_stmt* stmt;
@@ -153,6 +190,123 @@ int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const st
 
     sqlite3_finalize(stmt); // Clean up prepared statement
     return result; // Return the fetched index
+}
+
+// Function to fetch the dbId corresponding to the given refrIndex from the database
+std::string fetchDbId(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_set<int>& validMastersDB, int ConversionChoice) {
+    std::string query;
+
+    // Prepare SQL query to fetch the dbId based on ConversionChoice
+    switch (ConversionChoice) {
+    case 1: // Russian to English
+        query = "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?";
+        break;
+    case 2: // English to Russian
+        query = "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?";
+        break;
+    default:
+        std::cerr << "Invalid conversion choice." << std::endl;
+        return ""; // Return empty string if choice is invalid
+    }
+
+    // Add conditions based on validMastersDB and mastIndex
+    if (validMastersDB.count(1)) {
+        if (mastIndex == 2) {
+            query += " AND Master = 'Tribunal'";
+        }
+        else if (mastIndex == 3) {
+            query += " AND Master = 'Bloodmoon'";
+        }
+    }
+    else if (validMastersDB.count(2)) {
+        query += " AND Master = 'Tribunal'";
+    }
+    else if (validMastersDB.count(3)) {
+        query += " AND Master = 'Bloodmoon'";
+    }
+
+    sqlite3_stmt* stmt;
+    // Prepare the statement
+    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+        return ""; // Return an empty string in case of error
+    }
+
+    // Bind the refrIndex to the query
+    sqlite3_bind_int(stmt, 1, refrIndex);
+
+    // Execute the statement and fetch the dbId
+    std::string dbId;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char* id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        if (id) {
+            dbId = id; // Directly assign the id to dbId
+        }
+    }
+    else {
+        std::cerr << "No matching id found for refr_index: " << refrIndex << std::endl;
+    }
+
+    // Finalize the statement to release resources
+    sqlite3_finalize(stmt);
+    return dbId; // Return the fetched dbId (empty string if not found)
+}
+
+// Function to fetch the refr_index_RU or refr_index_EN based on the opposite ConversionChoice
+int fetchOppositeRefrIndex(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_set<int>& validMastersDB, int ConversionChoice) {
+    std::string query;
+
+    // Prepare SQL query to fetch the opposite refr_index based on ConversionChoice
+    switch (ConversionChoice) {
+    case 1: // Russian to English, we want the English refr_index
+        query = "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?";
+        break;
+    case 2: // English to Russian, we want the Russian refr_index
+        query = "SELECT refr_index_RU FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?";
+        break;
+    default:
+        std::cerr << "Invalid conversion choice." << std::endl;
+        return -1; // Return -1 if choice is invalid
+    }
+
+    // Add conditions based on validMastersDB and mastIndex
+    if (validMastersDB.count(1)) {
+        if (mastIndex == 2) {
+            query += " AND Master = 'Tribunal'";
+        }
+        else if (mastIndex == 3) {
+            query += " AND Master = 'Bloodmoon'";
+        }
+    }
+    else if (validMastersDB.count(2)) {
+        query += " AND Master = 'Tribunal'";
+    }
+    else if (validMastersDB.count(3)) {
+        query += " AND Master = 'Bloodmoon'";
+    }
+
+    sqlite3_stmt* stmt;
+    // Prepare the statement
+    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+        return -1; // Return -1 in case of error
+    }
+
+    // Bind the refrIndex to the query
+    sqlite3_bind_int(stmt, 1, refrIndex);
+
+    // Execute the statement and fetch the opposite refr_index
+    int oppositeRefrIndex = -1; // Default value if not found
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        oppositeRefrIndex = sqlite3_column_int(stmt, 0); // Get the opposite refr_index
+    }
+    else {
+        std::cerr << "No matching opposite refr_index found for refr_index: " << refrIndex << std::endl;
+    }
+
+    // Finalize the statement to release resources
+    sqlite3_finalize(stmt);
+    return oppositeRefrIndex; // Return the fetched opposite refr_index (or -1 if not found)
 }
 
 // Escape special characters for regex matching
@@ -207,9 +361,9 @@ void optimizeJsonReplacement(std::ostringstream& outputStream, const std::string
     }
 }
 
-// Function to process JSON objects and fetch replacements from the database
-std::unordered_map<int, int> processJsonObjects(sqlite3* db, const std::string& query, const std::string& inputData) {
-    std::unordered_map<int, int> replacements; // Map to store replacements
+// Function to process JSON objects, fetch replacements from the database, and handle mismatched entries
+// (mismatchs occurs if object in the game world from Tribunal or Bloodmoon was replaced using "Edit -> Search & Replace" in TES3 CS)
+int processAndHandleMismatches(sqlite3* db, const std::string& query, const std::string& inputData, int ConversionChoice, const std::unordered_set<int>& validMastersDB, std::unordered_map<int, int>& replacements) {
     std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})"); // Regex to match JSON objects
     auto it = std::sregex_iterator(inputData.begin(), inputData.end(), jsonObjectRegex);
     auto end = std::sregex_iterator();
@@ -227,24 +381,85 @@ std::unordered_map<int, int> processJsonObjects(sqlite3* db, const std::string& 
 
             int refrIndex = std::stoi(refrIndexMatch[1].str());
             std::string id = idMatch[1].str();
+            int currentMastIndex = fetchCurrentMastIndex(jsonObject); // Function to retrieve the current mast_index from jsonObject
             int newRefrIndex = fetchRefIndex(db, query, refrIndex, id); // Fetch new refr_index
 
             if (newRefrIndex != -1) {
                 replacements[refrIndex] = newRefrIndex; // Store the replacement
                 logMessage("Will replace refr_index " + std::to_string(refrIndex) + " with " + std::to_string(newRefrIndex) + " for id: " + id);
             }
+            else {
+                // If refr_index exists in the database but id does not match and mast_index is equal to 2 or 3, add to mismatchedEntries container
+                if (currentMastIndex == 2 || currentMastIndex == 3) {
+                    // Fetch the opposite refr_index based on the opposite ConversionChoice
+                    int oppositeRefrIndex = fetchOppositeRefrIndex(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
+
+                    // Retrieve dbId with required parameters based on mast_index and validMastersDB
+                    std::string dbId = fetchDbId(db, refrIndex, currentMastIndex, validMastersDB, ConversionChoice);
+                    mismatchedEntries.emplace_back(refrIndex, id, dbId, oppositeRefrIndex);
+                    logMessage("Mismatch found for json refr_index " + std::to_string(refrIndex) + " with json id: " + id + " and db id: " + dbId + " with opposite refr_index : " + std::to_string(oppositeRefrIndex));
+                }
+            }
         }
         ++it;
     }
 
-    return replacements; // Return all replacements found
+    // User selection prompt
+    int mismatchChoice = 0;
+    while (true) {
+        std::cout << "Found mismatched entries. Would you like to replace their refr_index anyway?\n1. Yes\n2. No\nChoice: ";
+        std::string input;
+        std::getline(std::cin, input);
+
+        if (input == "1" || input == "2") {
+            mismatchChoice = std::stoi(input);  // Convert string to int directly
+            break; // Exit loop on valid input
+        }
+        logMessage("Invalid choice. Enter 1 or 2."); // Log error for invalid input
+    }
+
+    if (mismatchChoice == 1) { // If the user selected 1 (Yes)
+        for (const auto& entry : mismatchedEntries) {
+            int refrIndex = entry.refrIndex;
+            std::string id = entry.id;
+            int oppositeRefrIndex = entry.oppositeRefrIndex; // Use the already gathered value
+
+            if (oppositeRefrIndex != -1) { // Check for validity
+                replacements[refrIndex] = oppositeRefrIndex;
+                logMessage("Mismatch replaced: refr_index " + std::to_string(refrIndex) + " now set to " + std::to_string(oppositeRefrIndex) + " without matching id.");
+
+                // Add console output for the replacement
+                std::cout << "Replaced refr_index " << refrIndex << " with " << oppositeRefrIndex
+                    << " for json id: " << id << " and db id: " << entry.dbId << std::endl;
+            }
+        }
+    }
+    else { // If the user selected 2 (No)
+        logMessage("Mismatched entries will remain unchanged.");
+    }
+
+    return mismatchChoice; // Return the user's choice
 }
 
 // Function to save modified JSON to a file
-bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string& outputData) {
+bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::unordered_map<int, int>& replacements, const std::string& originalData) {
+    std::string outputData = originalData; // Start with the original data
+
+    // Apply replacements to outputData
+    for (const auto& [oldRefrIndex, newRefrIndex] : replacements) {
+        // Replace old refr_index with new refr_index in the output data
+        // Assuming outputData is in JSON format and you need to replace the value
+        std::string oldRefrIndexStr = std::to_string(oldRefrIndex);
+        std::string newRefrIndexStr = std::to_string(newRefrIndex);
+
+        // Use regex to replace old refr_index with new refr_index in a safe way
+        std::regex refrIndexRegex(R"("refr_index"\s*:\s*")" + oldRefrIndexStr + R"(")");
+        outputData = std::regex_replace(outputData, refrIndexRegex, "\"refr_index\": \"" + newRefrIndexStr + "\"");
+    }
+
     std::ofstream outputFile(jsonFilePath);
     if (outputFile.is_open()) {
-        outputFile << outputData; // Write data to the file
+        outputFile << outputData; // Write modified data to the file
         outputFile.close();
         logMessage("Modified JSON saved as: " + jsonFilePath.string());
         return true;
@@ -294,7 +509,7 @@ int main() {
     logMessage("tes3conv.exe found.\n");
 
     // User choice for conversion direction
-    int conversionChoice = getConversionChoice();
+    int ConversionChoice = getConversionChoice();
 
     // User input for the file path of the plugin or master file
     std::filesystem::path inputFilePath = getInputFilePath(); // Use filesystem path directly
@@ -317,11 +532,6 @@ int main() {
     std::string inputData((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
     inputFile.close(); // Close the input file
 
-    // Check dependencies in the JSON header
-    if (!checkDependencyOrder(inputData)) {
-        logErrorAndExit(db, "Required Parent Masters not found or in the wrong order.\n");
-    }
-
     // Regex to find JSON objects containing mast_index
     std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
     std::string outputData = inputData; // Copy input data for modification
@@ -330,12 +540,18 @@ int main() {
     auto end = std::sregex_iterator();
 
     // Prepare SQL query based on conversion choice
-    std::string query = (conversionChoice == 1) ?
+    std::string query = (ConversionChoice == 1) ?
         "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
         "SELECT refr_index_RU FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
-    // Process all JSON objects and store replacements
-    std::unordered_map<int, int> replacements = processJsonObjects(db, query, inputData);
+    // Check dependencies in the JSON header
+    auto [isValid, validMastersDB] = checkDependencyOrder(inputData);
+    if (!isValid) {
+        logErrorAndExit(db, "Required Parent Masters not found or in the wrong order.\n");
+    }
+
+    // Processing all JSON objects and managing mismatches
+    int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements);
 
     // Check if any replacements were made
     if (replacements.empty()) {
@@ -348,14 +564,14 @@ int main() {
     outputData = outputStream.str(); // Get the modified data
 
     // Save the modified JSON data to a new file
-    std::filesystem::path newJsonFilePath = outputDir / ("CONV_" + std::string(conversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json");
-    if (!saveJsonToFile(newJsonFilePath, outputData)) {
+    std::filesystem::path newJsonFilePath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json");
+    if (!saveJsonToFile(newJsonFilePath, replacements, outputData)) {
         logErrorAndExit(db, "Error saving modified JSON file.\n");
     }
 
     // Converting all JSON objects back to .esp or .esm
     std::filesystem::path outputExtension = inputPath.extension(); // Get the original extension for output
-    std::filesystem::path newEspPath = outputDir / ("CONV_" + std::string(conversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + outputExtension.string()); // Construct output file path
+    std::filesystem::path newEspPath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + outputExtension.string()); // Construct output file path
 
     // Perform conversion from JSON back to ESP/ESM
     if (!convertJsonToEsp(newJsonFilePath, newEspPath)) {
