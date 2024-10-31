@@ -91,7 +91,7 @@ int getConversionChoice() {
     return ConversionChoice;
 }
 
-// Function to get the file path from the user
+// Function to get the file path to .esp or .esm from the user
 std::filesystem::path getInputFilePath() {
     std::filesystem::path filePath;
     while (true) {
@@ -292,52 +292,6 @@ std::string regexEscape(const std::string& str) {
     return std::regex_replace(str, specialChars, R"(\$&)"); // Escape special characters
 }
 
-// Optimized function for processing JSON replacements
-void optimizeJsonReplacement(std::ostringstream& outputStream, const std::string& inputData, const std::unordered_map<int, int>& replacements) {
-    size_t pos = 0;
-    size_t lastPos = 0;
-
-    while ((pos = inputData.find("\"mast_index\":", lastPos)) != std::string::npos) {
-        // Write data before the found "mast_index"
-        outputStream << inputData.substr(lastPos, pos - lastPos);
-
-        // Extract current mast_index
-        size_t endPos = inputData.find_first_of(",}", pos);
-        int currentMastIndex = std::stoi(inputData.substr(pos + 14, endPos - pos - 14));
-
-        // Move to the next "refr_index" entry
-        size_t refrIndexPos = inputData.find("\"refr_index\":", endPos);
-        if (refrIndexPos == std::string::npos) {
-            outputStream << inputData.substr(lastPos); // Write remaining data if no "refr_index" found
-            break;
-        }
-
-        // Extract current refr_index
-        size_t refrEndPos = inputData.find_first_of(",}", refrIndexPos);
-        int currentIndex = std::stoi(inputData.substr(refrIndexPos + 14, refrEndPos - refrIndexPos - 14));
-
-        // Check for valid mast_index and perform replacements
-        outputStream << "\"mast_index\": " << currentMastIndex << ",\n        ";
-        if (validMastIndices.find(currentMastIndex) != validMastIndices.end()) {
-            // Replace refr_index if needed
-            auto it = replacements.find(currentIndex);
-            outputStream << "\"refr_index\": " << (it != replacements.end() ? it->second : currentIndex);
-        }
-        else {
-            // Write back original refr_index if mast_index is invalid
-            outputStream << "\"refr_index\": " << currentIndex;
-        }
-
-        // Update lastPos to continue searching
-        lastPos = refrEndPos;
-    }
-
-    // Append any remaining data after the last processed entry
-    if (lastPos < inputData.size()) {
-        outputStream << inputData.substr(lastPos);
-    }
-}
-
 // Function to process JSON objects, fetch replacements from the database, and handle mismatched entries
 // (mismatchs occurs if object in the game world from Tribunal or Bloodmoon was replaced using "Edit -> Search & Replace" in TES3 CS)
 int processAndHandleMismatches(sqlite3* db, const std::string& query, const std::string& inputData, int ConversionChoice, const std::unordered_set<int>& validMastersDB, std::unordered_map<int, int>& replacements) {
@@ -403,7 +357,7 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
 
             if (oppositeRefrIndex != -1) { // Check for validity
                 replacements[refrIndex] = oppositeRefrIndex;
-                logMessage("Replaced JSON refr_index " + std::to_string(refrIndex) + " with DB refr_index : " + std::to_string(oppositeRefrIndex));
+                logMessage("Replaced JSON refr_index " + std::to_string(refrIndex) + " with DB refr_index: " + std::to_string(oppositeRefrIndex));
             }
         }
     }
@@ -414,18 +368,55 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
     return mismatchChoice; // Return the user's choice
 }
 
+// Optimized function for processing JSON replacements
+void optimizeJsonReplacement(std::ostringstream& outputStream, const std::string& inputData, const std::unordered_map<int, int>& replacements) {
+    size_t pos = 0, lastPos = 0;
+    const std::string mastKey = "\"mast_index\":";
+    const std::string refrKey = "\"refr_index\":";
+    const size_t mastKeyLen = mastKey.length();
+    const size_t refrKeyLen = refrKey.length();
+
+    while ((pos = inputData.find(mastKey, lastPos)) != std::string::npos) {
+        outputStream << inputData.substr(lastPos, pos - lastPos); // Write data before mast_index
+
+        size_t endPos = inputData.find_first_of(",}", pos);
+        int currentMastIndex = std::stoi(inputData.substr(pos + mastKeyLen, endPos - pos - mastKeyLen));
+
+        size_t refrIndexPos = inputData.find(refrKey, endPos);
+        if (refrIndexPos == std::string::npos) {
+            outputStream << inputData.substr(lastPos); // Write remaining data if no refr_index found
+            break;
+        }
+
+        size_t refrEndPos = inputData.find_first_of(",}", refrIndexPos);
+        int currentIndex = std::stoi(inputData.substr(refrIndexPos + refrKeyLen, refrEndPos - refrIndexPos - refrKeyLen));
+
+        outputStream << mastKey << " " << currentMastIndex << ",\n        ";
+        if (validMastIndices.count(currentMastIndex)) {
+            outputStream << refrKey << " " << replacements.at(currentIndex);
+        }
+        else {
+            outputStream << refrKey << " " << currentIndex;
+        }
+
+        lastPos = refrEndPos;
+    }
+
+    // Append remaining data after the last processed entry
+    if (lastPos < inputData.size()) {
+        outputStream << inputData.substr(lastPos);
+    }
+}
+
 // Function to save modified JSON to a file
 bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string& outputData) {
     std::ofstream outputFile(jsonFilePath);
-    if (outputFile.is_open()) {
+    if (outputFile) {
         outputFile << outputData; // Write data to the file
-        outputFile.close();
         logMessage("Modified JSON saved as: " + jsonFilePath.string());
         return true;
     }
-    else {
-        return false;
-    }
+    return false; // Return false if file couldn't be opened
 }
 
 // Function to convert JSON back to ESM/ESP
