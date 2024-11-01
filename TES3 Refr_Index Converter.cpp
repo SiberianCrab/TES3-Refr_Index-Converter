@@ -70,7 +70,7 @@ void clearLogFile(const std::filesystem::path& logFileName) {
 }
 
 // Function to get user input for conversion choice
-int getConversionChoice() {
+int getUserConversionChoice() {
     int ConversionChoice;
     while (true) {
         std::cout << "Convert refr_index in a plugin or master file:\n"
@@ -87,10 +87,10 @@ int getConversionChoice() {
 }
 
 // Function to get user input for handling mismatched entries
-int getUserChoice() {
+int getUserMismatchChoice() {
     int choice = 0;
     while (true) {
-        std::cout << "Mismatched entries found (could occur if a Tribunal or Bloodmoon object was replaced with\n"
+        std::cout << "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
             "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
             "1.Yes\n2.No\nChoice: ";
         std::string input;
@@ -360,8 +360,14 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
         ++it;
     }
 
+    // Check if there are any mismatches before prompting the user
+    if (mismatchedEntries.empty()) {
+        logMessage("No mismatches found. Skipping mismatch handling.");
+        return 0;  // or an appropriate value indicating no mismatches
+    }
+
     // Get user choice on how to handle mismatches
-    int mismatchChoice = getUserChoice();
+    int mismatchChoice = getUserMismatchChoice();
 
     // If user chooses to replace mismatched entries
     if (mismatchChoice == 1) {
@@ -378,7 +384,7 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
         }
     }
     else {
-        logMessage("Mismatched entries will remain unchanged.");
+        logMessage("\nMismatched entries will remain unchanged.");
     }
 
     return mismatchChoice;
@@ -426,7 +432,7 @@ bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string
     std::ofstream outputFile(jsonFilePath);
     if (outputFile) {
         outputFile << outputData;
-        logMessage("Modified JSON saved as: " + jsonFilePath.string());
+        logMessage("\nModified JSON saved as: " + jsonFilePath.string() + "\n");
         return true;
     }
     return false;
@@ -438,7 +444,7 @@ bool convertJsonToEsp(const std::filesystem::path& jsonFilePath, const std::file
     if (std::system(command.c_str()) != 0) {
         return false;
     }
-    logMessage("Final conversion to ESM/ESP successful: " + espFilePath.string());
+    logMessage("Final conversion to ESM/ESP successful: " + espFilePath.string() + "\n");
     return true;
 }
 
@@ -472,7 +478,7 @@ int main() {
     logMessage("tes3conv.exe found.\n");
 
     // Get conversion choice from the user
-    int ConversionChoice = getConversionChoice();
+    int ConversionChoice = getUserConversionChoice();
 
     // Get input file path from user
     std::filesystem::path inputFilePath = getInputFilePath();
@@ -521,6 +527,12 @@ int main() {
 
     // If no replacements were identified, cancel the conversion
     if (replacements.empty()) {
+        // Attempt to delete the created JSON file
+        if (std::filesystem::exists(jsonFilePath)) {
+            std::filesystem::remove(jsonFilePath);
+            logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
+        }
+
         logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
     }
 
@@ -542,6 +554,11 @@ int main() {
     if (!convertJsonToEsp(newJsonFilePath, newEspPath)) {
         logErrorAndExit(db, "Error converting JSON back to ESM/ESP.\n");
     }
+
+    // Delete both JSON files if conversion succeeds
+    if (std::filesystem::exists(jsonFilePath)) std::filesystem::remove(jsonFilePath);
+    if (std::filesystem::exists(newJsonFilePath)) std::filesystem::remove(newJsonFilePath);
+    logMessage("Temporary JSON files deleted: " + jsonFilePath.string() + "\n                         and: " + newJsonFilePath.string() + "\n");
 
     // Close the database and log completion
     sqlite3_close(db);
