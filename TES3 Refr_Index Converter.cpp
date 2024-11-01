@@ -140,26 +140,26 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const std::string&
     // Check order of Tribunal and Bloodmoon dependencies
     if (tPos != std::string::npos && bPos != std::string::npos) {
         if (tPos < bPos) {
-            logMessage("Valid order of Parent Masters found: M+T+B.");
+            logMessage("Valid order of Parent Masters found: M+T+B.\n");
             validMastIndices = { 2, 3 };
             validMastersDB.insert(1);
             return { true, validMastersDB };
         }
         else {
-            logMessage("Invalid order of Parent Masters! Tribunal.esm should be before Bloodmoon.esm.");
+            logMessage("Invalid order of Parent Masters! Tribunal.esm should be before Bloodmoon.esm.\n");
             return { false, {} };
         }
     }
 
     if (tPos != std::string::npos) {
-        logMessage("Valid order of Parent Masters found: M+T.");
+        logMessage("Valid order of Parent Masters found: M+T.\n");
         validMastIndices.insert(2);
         validMastersDB.insert(2);
         return { true, validMastersDB };
     }
 
     if (bPos != std::string::npos) {
-        logMessage("Valid order of Parent Masters found: M+B.");
+        logMessage("Valid order of Parent Masters found: M+B.\n");
         validMastIndices.insert(2);
         validMastersDB.insert(3);
         return { true, validMastersDB };
