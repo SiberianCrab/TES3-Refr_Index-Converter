@@ -14,7 +14,7 @@
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.0.1";
+const std::string PROGRAM_VERSION = "V 1.0.2";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 
 // Sets to store valid indices and master indices from the database
@@ -73,7 +73,7 @@ void clearLogFile(const std::filesystem::path& logFileName) {
 int getUserConversionChoice() {
     int ConversionChoice;
     while (true) {
-        std::cout << "Convert refr_index in a plugin or master file:\n"
+        std::cout << "Convert refr_index data in a plugin or master file:\n"
             "1. From Russian 1C to English GOTY\n2. From English GOTY to Russian 1C\nChoice: ";
         std::string input;
         std::getline(std::cin, input);
@@ -108,17 +108,17 @@ int getUserMismatchChoice() {
 std::filesystem::path getInputFilePath() {
     std::filesystem::path filePath;
     while (true) {
-        std::cout << "Enter full path to .ESP or .ESM (including extension), or filename (with extension)\n"
-            "if it's in the the same directory with this program.: ";
+        std::cout << "Enter full path to your .ESP or .ESM (including extension), or filename (with extension)\n"
+            "if it's in the the same directory with this program: ";
         std::string input;
         std::getline(std::cin, input);
         filePath = input;
         if (std::filesystem::exists(filePath) &&
             (filePath.extension() == ".esp" || filePath.extension() == ".esm")) {
-            logMessage("File found: " + filePath.string());
+            logMessage("Input file found: " + filePath.string());
             break;
         }
-        logMessage("File not found or incorrect extension.");
+        logMessage("Input file not found or incorrect extension.");
     }
     return filePath;
 }
@@ -353,8 +353,8 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
                 std::string dbId = fetchValue<FETCH_DB_ID>(db, refrIndex, currentMastIndex, validMastersDB, conversionChoice);
                 mismatchedEntries.emplace_back(MismatchEntry{ refrIndex, id, dbId, oppositeRefrIndex });
                 logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndex) +
-                    " with JSON id: " + id + " with DB refr_index: " + std::to_string(oppositeRefrIndex) +
-                    " with DB id: " + dbId);
+                    " and JSON id: " + id + " with DB refr_index: " + std::to_string(oppositeRefrIndex) +
+                    " and DB id: " + dbId);
             }
         }
         ++it;
@@ -475,7 +475,7 @@ int main() {
         logErrorAndExit(db, "tes3conv.exe not found. Please download the latest version from\n"
             "https://github.com/Greatness7/tes3conv/releases and place it in\nthe same directory with this program.\n");
     }
-    logMessage("tes3conv.exe found.\n");
+    logMessage("tes3conv.exe found...\nInitialisation complete.\n");
 
     // Get conversion choice from the user
     int ConversionChoice = getUserConversionChoice();
