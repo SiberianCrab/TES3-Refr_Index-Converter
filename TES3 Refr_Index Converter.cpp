@@ -14,7 +14,7 @@
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.0.2";
+const std::string PROGRAM_VERSION = "V 1.0.3";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 
 // Sets to store valid indices and master indices from the database
