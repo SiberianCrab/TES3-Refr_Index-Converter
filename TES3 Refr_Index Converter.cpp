@@ -35,7 +35,7 @@ std::vector<MismatchEntry> mismatchedEntries;
 
 // Function to log messages to a file and console
 void logMessage(const std::string& message) {
-    std::ofstream logFile("tes3ric_log.txt", std::ios_base::app); // Open log file in append mode
+    std::ofstream logFile("tes3_ric_log.txt", std::ios_base::app); // Open log file in append mode
     if (logFile.is_open()) {
         logFile << message << std::endl;
     }
@@ -453,7 +453,7 @@ int main() {
     std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n" << PROGRAM_AUTHOR << "\n\n";
 
     // Clear previous log entries
-    clearLogFile("tes3ric_log.txt");
+    clearLogFile("tes3_ric_log.txt");
 
     // Check if database file exists
     std::filesystem::path dbFilePath = "tes3_ru-en_refr_index.db";
