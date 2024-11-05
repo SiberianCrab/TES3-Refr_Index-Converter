@@ -503,6 +503,12 @@ int main() {
     std::string inputData((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
     inputFile.close();
 
+    // Check if the required dependencies are ordered correctly in the input data
+    auto [isValid, validMastersDB] = checkDependencyOrder(inputData);
+    if (!isValid) {
+        logErrorAndExit(db, "Required Parent Masters not found or in the wrong order.\n");
+    }
+
     // Regex pattern to find JSON objects with a "mast_index" field
     std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
     std::string outputData = inputData;
@@ -515,12 +521,6 @@ int main() {
     std::string query = (ConversionChoice == 1) ?
         "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
         "SELECT refr_index_RU FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ? AND id = ?;";
-
-    // Check if the required dependencies are ordered correctly in the input data
-    auto [isValid, validMastersDB] = checkDependencyOrder(inputData);
-    if (!isValid) {
-        logErrorAndExit(db, "Required Parent Masters not found or in the wrong order.\n");
-    }
 
     // Process mismatches between JSON and database refr_index values
     int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements, mismatchedEntries);
