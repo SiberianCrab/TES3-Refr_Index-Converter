@@ -27,7 +27,7 @@ struct MismatchEntry {
     int refrIndex;               // Reference index
     std::string id;              // ID of the mismatched entry
     std::string dbId;            // Database ID
-    int oppositeRefrIndex;       // Opposite reference index
+    int dbRefrIndex;             // Opposite reference index
 };
 
 // Vector to store all mismatched entries
@@ -298,15 +298,15 @@ auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_
         return dbId;
     }
     else {
-        int oppositeRefrIndex = -1;
+        int dbRefrIndex = -1;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
-            oppositeRefrIndex = sqlite3_column_int(stmt, 0);  // Assign found refr_index to oppositeRefrIndex
+            dbRefrIndex = sqlite3_column_int(stmt, 0);  // Assign found refr_index to dbRefrIndex
         }
         else {
             std::cerr << "No matching DB refr_index found for JSON refr_index: " << refrIndex << std::endl;
         }
         sqlite3_finalize(stmt);
-        return oppositeRefrIndex;
+        return dbRefrIndex;
     }
 }
 
@@ -349,11 +349,11 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
             }
             // If no match is found, add mismatch entry for further handling
             else if (currentMastIndex == 2 || currentMastIndex == 3) {
-                int oppositeRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndex, currentMastIndex, validMastersDB, conversionChoice);
+                int dbRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndex, currentMastIndex, validMastersDB, conversionChoice);
                 std::string dbId = fetchValue<FETCH_DB_ID>(db, refrIndex, currentMastIndex, validMastersDB, conversionChoice);
-                mismatchedEntries.emplace_back(MismatchEntry{ refrIndex, id, dbId, oppositeRefrIndex });
+                mismatchedEntries.emplace_back(MismatchEntry{ refrIndex, id, dbId, dbRefrIndex });
                 logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndex) +
-                    " and JSON id: " + id + " with DB refr_index: " + std::to_string(oppositeRefrIndex) +
+                    " and JSON id: " + id + " with DB refr_index: " + std::to_string(dbRefrIndex) +
                     " and DB id: " + dbId);
             }
         }
@@ -373,13 +373,13 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
     if (mismatchChoice == 1) {
         for (const auto& entry : mismatchedEntries) {
             int refrIndex = entry.refrIndex;
-            int oppositeRefrIndex = entry.oppositeRefrIndex;
+            int dbRefrIndex = entry.dbRefrIndex;
 
-            // Replace mismatched JSON refr_index with the DB oppositeRefrIndex if available
-            if (oppositeRefrIndex != -1) {
-                replacements[refrIndex] = oppositeRefrIndex;
+            // Replace mismatched JSON refr_index with the DB dbRefrIndex if available
+            if (dbRefrIndex != -1) {
+                replacements[refrIndex] = dbRefrIndex;
                 logMessage("Replaced JSON refr_index " + std::to_string(refrIndex) +
-                    " with DB refr_index: " + std::to_string(oppositeRefrIndex));
+                    " with DB refr_index: " + std::to_string(dbRefrIndex));
             }
         }
     }
