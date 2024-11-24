@@ -188,17 +188,6 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const std::string&
     return { false, {} };
 }
 
-// Function to retrieve the current master index from a JSON object
-int fetchCurrentMastIndex(const std::string& jsonObject) {
-    std::regex mastIndexRegex(R"(\"mast_index\"\s*:\s*(\d+))");
-    std::smatch mastIndexMatch;
-
-    if (std::regex_search(jsonObject, mastIndexMatch, mastIndexRegex)) {
-        return std::stoi(mastIndexMatch[1].str()); // Extract and convert to int
-    }
-    return -1; // Return -1 if not found
-}
-
 // Function to execute a SQL query and fetch the refr_index
 int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const std::string& id) {
     int result = -1;
@@ -220,14 +209,15 @@ int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const st
     return result;
 }
 
-// Function to find "refr_index" in a JSON object using a regex
-std::optional<int> findRefrIndex(const std::string& jsonObject) {
-    std::regex refrIndexRegex(R"(\"refr_index\"\s*:\s*(\d+))");  // Define regex to match "refr_index" and capture its value
-    std::smatch match;
-    if (std::regex_search(jsonObject, match, refrIndexRegex)) {
-        return std::stoi(match[1].str());  // Return the extracted value as an integer
+// Function to retrieve the current master index from a JSON object
+int fetchCurrentMastIndex(const std::string& jsonObject) {
+    std::regex mastIndexRegex(R"(\"mast_index\"\s*:\s*(\d+))");
+    std::smatch mastIndexMatch;
+
+    if (std::regex_search(jsonObject, mastIndexMatch, mastIndexRegex)) {
+        return std::stoi(mastIndexMatch[1].str()); // Extract and convert to int
     }
-    return std::nullopt;  // Return nullopt if "refr_index" is not found
+    return -1; // Return -1 if not found
 }
 
 // Function to find "id" in a JSON object using a regex
@@ -238,6 +228,16 @@ std::optional<std::string> findId(const std::string& jsonObject) {
         return match[1].str();  // Return the extracted ID as a string
     }
     return std::nullopt;  // Return nullopt if "id" is not found
+}
+
+// Function to find "refr_index" in a JSON object using a regex
+std::optional<int> findRefrIndex(const std::string& jsonObject) {
+    std::regex refrIndexRegex(R"(\"refr_index\"\s*:\s*(\d+))");  // Define regex to match "refr_index" and capture its value
+    std::smatch match;
+    if (std::regex_search(jsonObject, match, refrIndexRegex)) {
+        return std::stoi(match[1].str());  // Return the extracted value as an integer
+    }
+    return std::nullopt;  // Return nullopt if "refr_index" is not found
 }
 
 // Enumeration to specify fetch modes for database queries
@@ -410,6 +410,25 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
     return mismatchChoice;
 }
 
+// Структура для возвращаемых значений (регулярные выражения и SQL запрос)
+struct RegexQueryResult {
+    std::regex jsonObjectRegex;
+    std::string sqlQuery;
+};
+
+// Функция для получения регулярного выражения и SQL запроса в зависимости от выбора конверсии
+RegexQueryResult getJsonRegexAndQuery(int conversionChoice) {
+    // Регулярное выражение для поиска объектов с полем "mast_index"
+    std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
+
+    // Строка SQL запроса в зависимости от выбора конверсии
+    std::string sqlQuery = (conversionChoice == 1) ?
+        "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
+        "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
+
+    return { jsonObjectRegex, sqlQuery };
+}
+
 // Optimizes replacement of JSON refr_index values based on replacements map
 void optimizeJsonReplacement(std::ostringstream& outputStream, std::string_view inputData, const std::unordered_map<int, int>& replacements) {
     size_t pos = 0, lastPos = 0;
@@ -520,6 +539,8 @@ int main() {
     if (!inputFile) {
         logErrorAndExit(db, "Failed to open JSON file for reading: " + jsonFilePath.string() + "\n");
     }
+
+
     std::string inputData((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
     inputFile.close();
 
@@ -534,21 +555,18 @@ int main() {
         logErrorAndExit(db, "Required Parent Masters not found or are in the wrong order.\n");
     }
 
-    // Regex pattern to find JSON objects with a "mast_index" field
-    std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
-    std::string outputData = inputData;
+    // Получаем регулярное выражение и SQL запрос в зависимости от конверсии
+    auto [jsonObjectRegex, query] = getJsonRegexAndQuery(ConversionChoice);
 
-    // Iterator for regex matches within the input JSON data
+    // Теперь можем использовать jsonObjectRegex и query
+    std::string outputData = inputData;
     auto it = std::sregex_iterator(inputData.begin(), inputData.end(), jsonObjectRegex);
     auto end = std::sregex_iterator();
 
-    // SQL query based on the conversion choice
-    std::string query = (ConversionChoice == 1) ?
-        "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
-        "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
-
     // Process mismatches between JSON and database refr_index values
     int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements, mismatchedEntries);
+
+
 
     // If no replacements were identified, cancel the conversion
     if (replacements.empty()) {
