@@ -193,6 +193,27 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const std::string&
     return { false, {} };
 }
 
+
+
+// Структура для возвращаемых значений (регулярные выражения и SQL запрос)
+struct RegexQueryResult {
+    std::regex jsonObjectRegex;
+    std::string query;
+};
+
+// Функция для получения регулярного выражения и SQL запроса в зависимости от выбора конверсии
+RegexQueryResult getJsonRegexAndQuery(int conversionChoice) {
+    // Регулярное выражение для поиска объектов с полем "mast_index"
+    std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
+
+    // Строка SQL запроса в зависимости от выбора конверсии
+    std::string query = (conversionChoice == 1) ?
+        "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
+        "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
+
+    return { jsonObjectRegex, query };
+}
+
 // Function to execute a SQL query and fetch the refr_index
 int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const std::string& id) {
     int result = -1;
@@ -417,24 +438,6 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
     return mismatchChoice;
 }
 
-// Структура для возвращаемых значений (регулярные выражения и SQL запрос)
-struct RegexQueryResult {
-    std::regex jsonObjectRegex;
-    std::string sqlQuery;
-};
-
-// Функция для получения регулярного выражения и SQL запроса в зависимости от выбора конверсии
-RegexQueryResult getJsonRegexAndQuery(int conversionChoice) {
-    // Регулярное выражение для поиска объектов с полем "mast_index"
-    std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
-
-    // Строка SQL запроса в зависимости от выбора конверсии
-    std::string sqlQuery = (conversionChoice == 1) ?
-        "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
-        "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
-
-    return { jsonObjectRegex, sqlQuery };
-}
 
 // Optimizes replacement of JSON refr_index values based on replacements map
 void optimizeJsonReplacement(std::ostringstream& outputStream, std::string_view inputData, const std::unordered_map<int, int>& replacements) {
@@ -583,15 +586,15 @@ int main() {
 
 
     // If no replacements were identified, cancel the conversion
-    //if (replacements.empty()) {
-    //    // Attempt to delete the created JSON file
-    //    if (std::filesystem::exists(jsonFilePath)) {
-    //       std::filesystem::remove(jsonFilePath);
-    //        logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
-    //    }
-    // 
-    //    logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
-    //}
+    if (replacements.empty()) {
+        // Attempt to delete the created JSON file
+        if (std::filesystem::exists(jsonFilePath)) {
+           std::filesystem::remove(jsonFilePath);
+            logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
+        }
+     
+        logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
+    }
 
 
 
