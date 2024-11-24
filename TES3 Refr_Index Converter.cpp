@@ -1,25 +1,28 @@
-#include <cctype>                 // For character handling functions
-#include <filesystem>             // For file and directory handling
-#include <fstream>                // For file input and output
-#include <iostream>               // For standard input and output
-#include <limits>                 // For limits, used in input handling
+#include <iostream>               // For standard input and output operations
+#include <fstream>                // For file input and output operations
+#include <sstream>                // For working with string streams
+#include <string>                 // For string manipulation and handling
 #include <regex>                  // For regular expressions
-#include <sstream>                // For string stream manipulation
-#include <string>                 // For standard string handling
-#include <unordered_map>          // For hash map (key-value storage)
-#include <unordered_set>          // For hash set (unique value storage)
-#include <vector>                 // For dynamic arrays
-#include <sqlite3.h>              // For SQLite database handling
+#include <limits>                 // For setting input limits and working with numeric limits
+#include <regex>                  // For regular expressions (pattern matching)
+#include <unordered_map>          // For efficient key-value pair storage (hash map)
+#include <unordered_set>          // For efficient storage of unique elements (hash set)
+#include <cctype>                 // For character handling functions
 #include <optional>               // For optional values, used for error handling
+#include <vector>                 // For dynamic arrays or lists
+#include <filesystem>             // For interacting with the file system (directories, files)
+#include <sqlite3.h>              // For interacting with SQLite databases
 #include <json.hpp>               // For working with JSON data (nlohmann's JSON library)
 
-// Define an alias for ordered JSON type from the nlohmann library
+// UP - Define an alias for ordered JSON type from the nlohmann library
 using ordered_json = nlohmann::ordered_json;
 
-// Define program metadata constants
+// UP - Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
 const std::string PROGRAM_VERSION = "V 1.0.3";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
+
+
 
 // Sets to store valid indices and master indices from the database
 std::unordered_set<int> validMastIndices;
@@ -37,7 +40,9 @@ struct MismatchEntry {
 // Vector to store all mismatched entries
 std::vector<MismatchEntry> mismatchedEntries;
 
-// Function to log messages to both a log file and console
+
+
+// UP - Function to log messages to both a log file and console
 void logMessage(const std::string& message, const std::filesystem::path& logFilePath = "tes3_ric_log.txt") {
     std::ofstream logFile(logFilePath, std::ios_base::app);
 
@@ -52,7 +57,7 @@ void logMessage(const std::string& message, const std::filesystem::path& logFile
     std::cout << message << std::endl;
 }
 
-// Function to log errors, close the database (if open), and terminate the program
+// UP - Function to log errors, close the database (if open), and terminate the program
 void logErrorAndExit(sqlite3* db, const std::string& message) {
     logMessage(message);
 
@@ -69,7 +74,7 @@ void logErrorAndExit(sqlite3* db, const std::string& message) {
     throw std::runtime_error(message);
 }
 
-// Function to clear the log file if it exists, and log the status
+// UP - Function to clear the log file if it exists, and log the status
 void clearLogFile(const std::filesystem::path& logFileName = "tes3_ric_log.txt") {
     // Check if the log file exists before trying to remove it
     if (std::filesystem::exists(logFileName)) {
@@ -84,7 +89,7 @@ void clearLogFile(const std::filesystem::path& logFileName = "tes3_ric_log.txt")
     }
 }
 
-// Function to get user input for conversion choice
+// UP - Function to get user input for conversion choice
 int getUserConversionChoice() {
     int ConversionChoice;
     while (true) {
@@ -101,7 +106,7 @@ int getUserConversionChoice() {
     return ConversionChoice;
 }
 
-// Function to get user input for handling mismatched entries
+// UP - Function to get user input for handling mismatched entries
 int getUserMismatchChoice() {
     int mismatchChoice;
     while (true) {
@@ -119,7 +124,7 @@ int getUserMismatchChoice() {
     return mismatchChoice;
 }
 
-// Function to get the path of the input file from the user
+// UP - Function to get the path of the input file from the user
 std::filesystem::path getInputFilePath() {
     std::filesystem::path filePath;
     while (true) {
@@ -207,37 +212,6 @@ int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const st
 
     sqlite3_finalize(stmt); // Finalize the statement to free resources
     return result;
-}
-
-// Function to retrieve the current master index from a JSON object
-int fetchCurrentMastIndex(const std::string& jsonObject) {
-    std::regex mastIndexRegex(R"(\"mast_index\"\s*:\s*(\d+))");
-    std::smatch mastIndexMatch;
-
-    if (std::regex_search(jsonObject, mastIndexMatch, mastIndexRegex)) {
-        return std::stoi(mastIndexMatch[1].str()); // Extract and convert to int
-    }
-    return -1; // Return -1 if not found
-}
-
-// Function to find "id" in a JSON object using a regex
-std::optional<std::string> findId(const std::string& jsonObject) {
-    std::regex idRegex(R"(\"id\"\s*:\s*\"([^\"]+)\")");  // Define regex to match "id" and capture its value
-    std::smatch match;
-    if (std::regex_search(jsonObject, match, idRegex)) {
-        return match[1].str();  // Return the extracted ID as a string
-    }
-    return std::nullopt;  // Return nullopt if "id" is not found
-}
-
-// Function to find "refr_index" in a JSON object using a regex
-std::optional<int> findRefrIndex(const std::string& jsonObject) {
-    std::regex refrIndexRegex(R"(\"refr_index\"\s*:\s*(\d+))");  // Define regex to match "refr_index" and capture its value
-    std::smatch match;
-    if (std::regex_search(jsonObject, match, refrIndexRegex)) {
-        return std::stoi(match[1].str());  // Return the extracted value as an integer
-    }
-    return std::nullopt;  // Return nullopt if "refr_index" is not found
 }
 
 // Enumeration to specify fetch modes for database queries
@@ -328,6 +302,39 @@ auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_
         sqlite3_finalize(stmt);
         return dbRefrIndex;
     }
+}
+
+
+
+// Function to retrieve the current master index from a JSON object
+int fetchCurrentMastIndex(const std::string& jsonObject) {
+    std::regex mastIndexRegex(R"(\"mast_index\"\s*:\s*(\d+))");
+    std::smatch mastIndexMatch;
+
+    if (std::regex_search(jsonObject, mastIndexMatch, mastIndexRegex)) {
+        return std::stoi(mastIndexMatch[1].str()); // Extract and convert to int
+    }
+    return -1; // Return -1 if not found
+}
+
+// Function to find "id" in a JSON object using a regex
+std::optional<std::string> findId(const std::string& jsonObject) {
+    std::regex idRegex(R"(\"id\"\s*:\s*\"([^\"]+)\")");  // Define regex to match "id" and capture its value
+    std::smatch match;
+    if (std::regex_search(jsonObject, match, idRegex)) {
+        return match[1].str();  // Return the extracted ID as a string
+    }
+    return std::nullopt;  // Return nullopt if "id" is not found
+}
+
+// Function to find "refr_index" in a JSON object using a regex
+std::optional<int> findRefrIndex(const std::string& jsonObject) {
+    std::regex refrIndexRegex(R"(\"refr_index\"\s*:\s*(\d+))");  // Define regex to match "refr_index" and capture its value
+    std::smatch match;
+    if (std::regex_search(jsonObject, match, refrIndexRegex)) {
+        return std::stoi(match[1].str());  // Return the extracted value as an integer
+    }
+    return std::nullopt;  // Return nullopt if "refr_index" is not found
 }
 
 // Function to escape special characters in a regex pattern
@@ -466,6 +473,8 @@ void optimizeJsonReplacement(std::ostringstream& outputStream, std::string_view 
     }
 }
 
+
+
 // Saves modified JSON data to file and logs success message
 bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string& outputData) {
     std::ofstream outputFile(jsonFilePath);
@@ -488,13 +497,13 @@ bool convertJsonToEsp(const std::filesystem::path& jsonFilePath, const std::file
 }
 
 int main() {
-    // Display program information
+    // UP - Program information
     std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n" << PROGRAM_AUTHOR << "\n\n";
 
-    // Clear previous log entries
+    // UP - Clear old logs
     clearLogFile("tes3_ric_log.txt");
 
-    // Check if database file exists
+    // UP - Check if the database file exists
     std::filesystem::path dbFilePath = "tes3_en-ru_refr_index.db";
     if (!std::filesystem::exists(dbFilePath)) {
         logErrorAndExit(nullptr, "Database file 'tes3_en-ru_refr_index.db' not found.\n");
@@ -502,13 +511,13 @@ int main() {
 
     sqlite3* db = nullptr;
 
-    // Attempt to open database
+    // UP - If the database file exists, attempt to load it
     if (sqlite3_open(dbFilePath.string().c_str(), &db)) {
         logErrorAndExit(db, "Failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n");
     }
     logMessage("Database opened successfully...");
 
-    // Check if the converter executable exists
+    // UP - Check if tes3conv.exe exists
     std::filesystem::path converterPath = "tes3conv.exe";
     if (!std::filesystem::exists(converterPath)) {
         logErrorAndExit(db, "tes3conv.exe not found. Please download the latest version from\n"
@@ -516,44 +525,49 @@ int main() {
     }
     logMessage("tes3conv.exe found...\nInitialisation complete.\n");
 
-    // Get conversion choice from the user
+    // UP - Get the conversion direction choice from the user
     int ConversionChoice = getUserConversionChoice();
 
-    // Get input file path from user
+    // UP - Get the input file path from the user
     std::filesystem::path inputFilePath = getInputFilePath();
     std::filesystem::path inputPath(inputFilePath);
 
-    // Prepare paths for output files
+    // UP - Define the output paths
     std::filesystem::path outputDir = inputPath.parent_path();
     std::filesystem::path jsonFilePath = outputDir / (inputPath.stem() += ".json");
 
-    // Convert the input file to JSON format using tes3conv.exe
+    // UP - Convert the input file to JSON using tes3conv.exe
     std::string command = "tes3conv.exe \"" + inputPath.string() + "\" \"" + jsonFilePath.string() + "\"";
     if (std::system(command.c_str()) != 0) {
         logErrorAndExit(db, "Error converting to JSON. Check tes3conv.exe and the input file.\n");
     }
     logMessage("Conversion to JSON successful: " + jsonFilePath.string());
 
-    // Read the generated JSON file into a string
+    // Up - Load the generated JSON file into a JSON object
     std::ifstream inputFile(jsonFilePath);
     if (!inputFile) {
         logErrorAndExit(db, "Failed to open JSON file for reading: " + jsonFilePath.string() + "\n");
     }
 
 
+
     std::string inputData((std::istreambuf_iterator<char>(inputFile)), std::istreambuf_iterator<char>());
     inputFile.close();
 
-    // Check if the required dependencies are ordered correctly in the input data
-    auto [isValid, validMastersDB] = checkDependencyOrder(inputData);
-    if (!isValid) {
-        // Remove the temporary JSON file if it exists
-        if (std::filesystem::exists(jsonFilePath)) {
-            std::filesystem::remove(jsonFilePath);
-            logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
-        }
-        logErrorAndExit(db, "Required Parent Masters not found or are in the wrong order.\n");
-    }
+
+
+    // UP - Check if the required dependencies are ordered correctly in the input data
+    //auto [isValid, validMastersDB] = checkDependencyOrder(inputData);
+    //if (!isValid) {
+    //    // Remove the temporary JSON file if it exists
+    //    if (std::filesystem::exists(jsonFilePath)) {
+    //        std::filesystem::remove(jsonFilePath);
+    //        logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
+    //    }
+    //    logErrorAndExit(db, "Required Parent Masters not found or are in the wrong order.\n");
+    //}
+
+
 
     // Получаем регулярное выражение и SQL запрос в зависимости от конверсии
     auto [jsonObjectRegex, query] = getJsonRegexAndQuery(ConversionChoice);
@@ -569,28 +583,32 @@ int main() {
 
 
     // If no replacements were identified, cancel the conversion
-    if (replacements.empty()) {
-        // Attempt to delete the created JSON file
-        if (std::filesystem::exists(jsonFilePath)) {
-            std::filesystem::remove(jsonFilePath);
-            logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
-        }
+    //if (replacements.empty()) {
+    //    // Attempt to delete the created JSON file
+    //    if (std::filesystem::exists(jsonFilePath)) {
+    //       std::filesystem::remove(jsonFilePath);
+    //        logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
+    //    }
+    // 
+    //    logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
+    //}
 
-        logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
-    }
+
 
     // Prepare output JSON data with updated refr_index values
     std::ostringstream outputStream;
     optimizeJsonReplacement(outputStream, inputData, replacements);
     outputData = outputStream.str();
 
-    // Save modified JSON file with a new name indicating conversion direction
+
+
+    // Save the modified JSON data to a new file using the saveJsonToFile function
     std::filesystem::path newJsonFilePath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json");
-    if (!saveJsonToFile(newJsonFilePath, outputData)) {
+    if (!saveJsonToFile(newJsonFilePath, outputData)) { // inputData))
         logErrorAndExit(db, "Error saving modified JSON file.\n");
     }
 
-    // Convert the modified JSON back to ESP/ESM format
+    // UP - Convert the JSON back to ESP/ESM format
     std::filesystem::path outputExtension = inputPath.extension();
     std::filesystem::path newEspPath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + outputExtension.string());
 
@@ -598,16 +616,16 @@ int main() {
         logErrorAndExit(db, "Error converting JSON back to ESM/ESP.\n");
     }
 
-    // Delete both JSON files if conversion succeeds
-    if (std::filesystem::exists(jsonFilePath)) std::filesystem::remove(jsonFilePath);
-    if (std::filesystem::exists(newJsonFilePath)) std::filesystem::remove(newJsonFilePath);
-    logMessage("Temporary JSON files deleted: " + jsonFilePath.string() + "\n                         and: " + newJsonFilePath.string() + "\n");
+    // UP - Delete both JSON files if conversion succeeds
+    //if (std::filesystem::exists(jsonFilePath)) std::filesystem::remove(jsonFilePath);
+    //if (std::filesystem::exists(newJsonFilePath)) std::filesystem::remove(newJsonFilePath);
+    //logMessage("Temporary JSON files deleted: " + jsonFilePath.string() + "\n                         and: " + newJsonFilePath.string() + "\n");
 
-    // Close the database and finish execution
+    // UP - Close the database and finish execution
     sqlite3_close(db);
     logMessage("The ending of the words is ALMSIVI.\n");
 
-    // Prompt the user to press Enter before exiting
+    // UP - Wait for the Enter key to finish
     std::cout << "Press Enter to continue...";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     return 0;
