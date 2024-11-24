@@ -11,6 +11,10 @@
 #include <vector>                 // For dynamic arrays
 #include <sqlite3.h>              // For SQLite database handling
 #include <optional>               // For optional values, used for error handling
+#include <json.hpp>               // For working with JSON data (nlohmann's JSON library)
+
+// Define an alias for ordered JSON type from the nlohmann library
+using ordered_json = nlohmann::ordered_json;
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
@@ -33,38 +37,49 @@ struct MismatchEntry {
 // Vector to store all mismatched entries
 std::vector<MismatchEntry> mismatchedEntries;
 
-// Function to log messages to a file and console
-void logMessage(const std::string& message) {
-    std::ofstream logFile("tes3_ric_log.txt", std::ios_base::app); // Open log file in append mode
+// Function to log messages to both a log file and console
+void logMessage(const std::string& message, const std::filesystem::path& logFilePath = "tes3_ric_log.txt") {
+    std::ofstream logFile(logFilePath, std::ios_base::app);
+
+    // Check if the file opened successfully and write the message
     if (logFile.is_open()) {
         logFile << message << std::endl;
     }
     else {
         std::cerr << "Failed to open log file." << std::endl;
     }
+
     std::cout << message << std::endl;
 }
 
-// Function to log an error, close the database if open, and exit the program
+// Function to log errors, close the database (if open), and terminate the program
 void logErrorAndExit(sqlite3* db, const std::string& message) {
     logMessage(message);
+
+    // Close the SQLite database if it is open to avoid memory leaks
     if (db) {
-        sqlite3_close(db); // Close database connection
+        sqlite3_close(db);
     }
+
+    // Prompt the user to press Enter to continue and clear any input buffer
     std::cout << "Press Enter to continue...";
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Wait for user input
-    throw std::runtime_error(message); // Throw error and exit
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    // Throw a runtime error to exit the program and propagate the error
+    throw std::runtime_error(message);
 }
 
-// Function to clear the log file
-void clearLogFile(const std::filesystem::path& logFileName) {
+// Function to clear the log file if it exists, and log the status
+void clearLogFile(const std::filesystem::path& logFileName = "tes3_ric_log.txt") {
+    // Check if the log file exists before trying to remove it
     if (std::filesystem::exists(logFileName)) {
         try {
-            std::filesystem::remove(logFileName); // Remove log file if it exists
-            logMessage("Log cleared successfully...");
+            std::filesystem::remove(logFileName);
+            logMessage("Log cleared successfully...", logFileName);
         }
         catch (const std::filesystem::filesystem_error& e) {
-            logMessage("Error clearing log file: " + std::string(e.what()));
+            // Log any error that occurs during the file removal process
+            logMessage("Error clearing log file: " + std::string(e.what()), logFileName);
         }
     }
 }
@@ -88,7 +103,7 @@ int getUserConversionChoice() {
 
 // Function to get user input for handling mismatched entries
 int getUserMismatchChoice() {
-    int choice = 0;
+    int mismatchChoice;
     while (true) {
         std::cout << "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
             "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
@@ -96,12 +111,12 @@ int getUserMismatchChoice() {
         std::string input;
         std::getline(std::cin, input);
         if (input == "1" || input == "2") {
-            choice = std::stoi(input); // Convert string to int
+            mismatchChoice = std::stoi(input); // Convert string to int
             break;
         }
         logMessage("Invalid choice. Enter 1 or 2.");
     }
-    return choice;
+    return mismatchChoice;
 }
 
 // Function to get the path of the input file from the user
@@ -109,12 +124,17 @@ std::filesystem::path getInputFilePath() {
     std::filesystem::path filePath;
     while (true) {
         std::cout << "Enter full path to your .ESP or .ESM (including extension), or filename (with extension)\n"
-            "if it's in the the same directory with this program: ";
+            "if it's in the same directory with this program: ";
         std::string input;
         std::getline(std::cin, input);
         filePath = input;
+
+        // Convert the file extension to lowercase for case-insensitive comparison
+        std::string extension = filePath.extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
         if (std::filesystem::exists(filePath) &&
-            (filePath.extension() == ".esp" || filePath.extension() == ".esm")) {
+            (extension == ".esp" || extension == ".esm")) {
             logMessage("Input file found: " + filePath.string());
             break;
         }
@@ -235,12 +255,12 @@ auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_
     // Determine query based on conversion choice and fetch mode
     switch (conversionChoice) {
     case 1:
-        query = (mode == FETCH_DB_ID) ? "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?"
-            : "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ?";
+        query = (mode == FETCH_DB_ID) ? "SELECT ID FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ?"
+            : "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ?";
         break;
     case 2:
-        query = (mode == FETCH_DB_ID) ? "SELECT ID FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?"
-            : "SELECT refr_index_RU FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ?";
+        query = (mode == FETCH_DB_ID) ? "SELECT ID FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ?"
+            : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ?";
         break;
     default:
         std::cerr << "Invalid conversion choice." << std::endl;
@@ -456,9 +476,9 @@ int main() {
     clearLogFile("tes3_ric_log.txt");
 
     // Check if database file exists
-    std::filesystem::path dbFilePath = "tes3_ru-en_refr_index.db";
+    std::filesystem::path dbFilePath = "tes3_en-ru_refr_index.db";
     if (!std::filesystem::exists(dbFilePath)) {
-        logErrorAndExit(nullptr, "Database file 'tes3_ru-en_refr_index.db' not found.\n");
+        logErrorAndExit(nullptr, "Database file 'tes3_en-ru_refr_index.db' not found.\n");
     }
 
     sqlite3* db = nullptr;
@@ -506,7 +526,12 @@ int main() {
     // Check if the required dependencies are ordered correctly in the input data
     auto [isValid, validMastersDB] = checkDependencyOrder(inputData);
     if (!isValid) {
-        logErrorAndExit(db, "Required Parent Masters not found or in the wrong order.\n");
+        // Remove the temporary JSON file if it exists
+        if (std::filesystem::exists(jsonFilePath)) {
+            std::filesystem::remove(jsonFilePath);
+            logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
+        }
+        logErrorAndExit(db, "Required Parent Masters not found or are in the wrong order.\n");
     }
 
     // Regex pattern to find JSON objects with a "mast_index" field
@@ -519,8 +544,8 @@ int main() {
 
     // SQL query based on the conversion choice
     std::string query = (ConversionChoice == 1) ?
-        "SELECT refr_index_EN FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
-        "SELECT refr_index_RU FROM [tes3_T-B_ru-en_refr_index] WHERE refr_index_EN = ? AND id = ?;";
+        "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
+        "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
     // Process mismatches between JSON and database refr_index values
     int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements, mismatchedEntries);
@@ -560,9 +585,9 @@ int main() {
     if (std::filesystem::exists(newJsonFilePath)) std::filesystem::remove(newJsonFilePath);
     logMessage("Temporary JSON files deleted: " + jsonFilePath.string() + "\n                         and: " + newJsonFilePath.string() + "\n");
 
-    // Close the database and log completion
+    // Close the database and finish execution
     sqlite3_close(db);
-    logMessage("Conversion complete.\n");
+    logMessage("The ending of the words is ALMSIVI.\n");
 
     // Prompt the user to press Enter before exiting
     std::cout << "Press Enter to continue...";

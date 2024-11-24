@@ -37,6 +37,9 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Libraries\json.hpp">
+      <Filter>Libraries</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="DB\tes3_en-ru_refr_index.db">
