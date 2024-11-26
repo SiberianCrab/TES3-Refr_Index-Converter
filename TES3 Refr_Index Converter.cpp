@@ -159,7 +159,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const std::string&
         if (tPos < bPos) {
             logMessage("Valid order of Parent Masters found: M+T+B.\n");
             validMastIndices = { 2, 3 };
-            validMastersDB.insert(1);
+            validMastersDB = { 1 };
             return { true, validMastersDB };
         }
         else {
@@ -170,15 +170,15 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const std::string&
 
     if (tPos != std::string::npos) {
         logMessage("Valid order of Parent Masters found: M+T.\n");
-        validMastIndices.insert(2);
-        validMastersDB.insert(2);
+        validMastIndices = { 2 };
+        validMastersDB = { 2 };
         return { true, validMastersDB };
     }
 
     if (bPos != std::string::npos) {
         logMessage("Valid order of Parent Masters found: M+B.\n");
-        validMastIndices.insert(2);
-        validMastersDB.insert(3);
+        validMastIndices = { 2 };
+        validMastersDB = { 3 };
         return { true, validMastersDB };
     }
 
@@ -333,7 +333,7 @@ auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_
 }
 
 // Function to process and handle mismatched "refr_index" values between JSON and DB
-int processAndHandleMismatches(sqlite3* db, const std::string& query, const std::string& inputData,
+int processReplacementsAndMismatches(sqlite3* db, const std::string& query, const std::string& inputData,
     int conversionChoice, const std::unordered_set<int>& validMastersDB,
     std::unordered_map<int, int>& replacements,
     std::vector<MismatchEntry>& mismatchedEntries) {
@@ -405,7 +405,7 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
 }
 
 // Optimizes replacement of JSON refr_index values based on replacements map
-void optimizeJsonReplacement(std::ostringstream& outputStream, std::string_view inputData, const std::unordered_map<int, int>& replacements) {
+void writeReplacementsAndMismatches(std::ostringstream& outputStream, std::string_view inputData, const std::unordered_map<int, int>& replacements) {
     size_t pos = 0, lastPos = 0;
     const std::string mastKey = "\"mast_index\":";
     const std::string refrKey = "\"refr_index\":";
@@ -535,7 +535,7 @@ int main() {
         "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
     // Process mismatches between JSON and database refr_index values
-    int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements, mismatchedEntries);
+    processReplacementsAndMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements, mismatchedEntries);
 
     // If no replacements were identified, cancel the conversion
     if (replacements.empty()) {
@@ -550,7 +550,7 @@ int main() {
 
     // Prepare output JSON data with updated refr_index values
     std::ostringstream outputStream;
-    optimizeJsonReplacement(outputStream, inputData, replacements);
+    writeReplacementsAndMismatches(outputStream, inputData, replacements);
     inputData = outputStream.str();
 
     // Save modified JSON file with a new name indicating conversion direction
