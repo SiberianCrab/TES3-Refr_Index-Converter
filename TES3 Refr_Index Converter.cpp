@@ -38,7 +38,7 @@ struct MismatchEntry {
 std::vector<MismatchEntry> mismatchedEntries;
 
 // Function to log messages to both a log file and console
-void logMessage(const std::string& message, const std::filesystem::path& logFilePath = "tes3_ric_log.txt") {
+void logMessage(const std::string& message, const std::filesystem::path& logFilePath = "tes3_ri_log.txt") {
     std::ofstream logFile(logFilePath, std::ios_base::app);
 
     // Check if the file opened successfully and write the message
@@ -70,7 +70,7 @@ void logErrorAndExit(sqlite3* db, const std::string& message) {
 }
 
 // Function to clear the log file if it exists, and log the status
-void clearLogFile(const std::filesystem::path& logFileName = "tes3_ric_log.txt") {
+void clearLogFile(const std::filesystem::path& logFileName = "tes3_ri_log.txt") {
     // Check if the log file exists before trying to remove it
     if (std::filesystem::exists(logFileName)) {
         try {
@@ -487,12 +487,12 @@ int main() {
     std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n" << PROGRAM_AUTHOR << "\n\n";
 
     // Clear previous log entries
-    clearLogFile("tes3_ric_log.txt");
+    clearLogFile("tes3_ri_log.txt");
 
     // Check if database file exists
-    std::filesystem::path dbFilePath = "tes3_en-ru_refr_index.db";
+    std::filesystem::path dbFilePath = "tes3_ri_en-ru_refr_index.db";
     if (!std::filesystem::exists(dbFilePath)) {
-        logErrorAndExit(nullptr, "Database file 'tes3_en-ru_refr_index.db' not found.\n");
+        logErrorAndExit(nullptr, "Database file 'tes3_ri_en-ru_refr_index.db' not found.\n");
     }
 
     sqlite3* db = nullptr;
@@ -503,7 +503,7 @@ int main() {
     }
     logMessage("Database opened successfully...");
 
-    // Check if the converter executable exists
+    // Check if tes3conv.exe exists
     std::filesystem::path converterPath = "tes3conv.exe";
     if (!std::filesystem::exists(converterPath)) {
         logErrorAndExit(db, "tes3conv.exe not found. Please download the latest version from\n"
@@ -511,18 +511,18 @@ int main() {
     }
     logMessage("tes3conv.exe found...\nInitialisation complete.\n");
 
-    // Get conversion choice from the user
+    // Get conversion choice from user
     int ConversionChoice = getUserConversionChoice();
 
     // Get input file path from user
     std::filesystem::path inputFilePath = getInputFilePath();
     std::filesystem::path inputPath(inputFilePath);
 
-    // Prepare paths for output files
+    // Define output paths
     std::filesystem::path outputDir = inputPath.parent_path();
     std::filesystem::path jsonFilePath = outputDir / (inputPath.stem() += ".json");
 
-    // Convert the input file to JSON format using tes3conv.exe
+    // Convert the input file to JSON using tes3conv.exe
     std::string command = "tes3conv.exe \"" + inputPath.string() + "\" \"" + jsonFilePath.string() + "\"";
     if (std::system(command.c_str()) != 0) {
         logErrorAndExit(db, "Error converting to JSON. Check tes3conv.exe and the input file.\n");

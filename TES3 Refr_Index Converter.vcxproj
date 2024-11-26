@@ -149,7 +149,7 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="DB\tes3_en-ru_refr_index.db">
+    <CopyFileToFolders Include="DB\tes3_ri_en-ru_refr_index.db">
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
       <FileType>Document</FileType>
     </CopyFileToFolders>
