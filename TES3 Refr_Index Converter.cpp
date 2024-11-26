@@ -154,9 +154,6 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const std::string&
         return { false, {} };
     }
 
-    validMastIndices.clear();
-    validMastersDB.clear();
-
     // Check order of Tribunal and Bloodmoon dependencies
     if (tPos != std::string::npos && bPos != std::string::npos) {
         if (tPos < bPos) {
@@ -209,6 +206,12 @@ int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const st
     return result;
 }
 
+// Function to escape special characters in a regex pattern
+std::string regexEscape(const std::string& str) {
+    static const std::regex specialChars(R"([-[\]{}()*+?.,\^$|#\s])");  // Define special characters to escape
+    return std::regex_replace(str, specialChars, R"(\$&)");  // Escape each special character with '\'
+}
+
 // Function to retrieve the current master index from a JSON object
 int fetchCurrentMastIndex(const std::string& jsonObject) {
     std::regex mastIndexRegex(R"(\"mast_index\"\s*:\s*(\d+))");
@@ -238,6 +241,7 @@ std::optional<int> findRefrIndex(const std::string& jsonObject) {
     }
     return std::nullopt;  // Return nullopt if "refr_index" is not found
 }
+
 // Enumeration to specify fetch modes for database queries
 enum FetchMode {
     FETCH_DB_ID,               // Fetch the ID from the database
@@ -328,12 +332,6 @@ auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_
     }
 }
 
-// Function to escape special characters in a regex pattern
-std::string regexEscape(const std::string& str) {
-    static const std::regex specialChars(R"([-[\]{}()*+?.,\^$|#\s])");  // Define special characters to escape
-    return std::regex_replace(str, specialChars, R"(\$&)");  // Escape each special character with '\'
-}
-
 // Function to process and handle mismatched "refr_index" values between JSON and DB
 int processAndHandleMismatches(sqlite3* db, const std::string& query, const std::string& inputData,
     int conversionChoice, const std::unordered_set<int>& validMastersDB,
@@ -408,16 +406,17 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
     return mismatchChoice;
 }
 
-// Ñòðóêòóðà äëÿ âîçâðàùàåìûõ çíà÷åíèé (ðåãóëÿðíûå âûðàæåíèÿ è SQL çàïðîñ)
+// Structure for returned values (regular expressions and SQL query)
 struct RegexQueryResult {
     std::regex jsonObjectRegex;
     std::string sqlQuery;
 };
-// Ôóíêöèÿ äëÿ ïîëó÷åíèÿ ðåãóëÿðíîãî âûðàæåíèÿ è SQL çàïðîñà â çàâèñèìîñòè îò âûáîðà êîíâåðñèè
+
+// Function to get the regular expression and SQL query based on the conversion choice
 RegexQueryResult getJsonRegexAndQuery(int conversionChoice) {
-    // Ðåãóëÿðíîå âûðàæåíèå äëÿ ïîèñêà îáúåêòîâ ñ ïîëåì "mast_index"
+    // Regular expression to find objects with the field "mast_index"
     std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
-    // Ñòðîêà SQL çàïðîñà â çàâèñèìîñòè îò âûáîðà êîíâåðñèè
+    // SQL query string based on the conversion choice
     std::string sqlQuery = (conversionChoice == 1) ?
         "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
         "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
@@ -482,6 +481,7 @@ bool convertJsonToEsp(const std::filesystem::path& jsonFilePath, const std::file
     return true;
 }
 
+// Main function
 int main() {
     // Display program information
     std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n" << PROGRAM_AUTHOR << "\n\n";
@@ -548,10 +548,10 @@ int main() {
         logErrorAndExit(db, "Required Parent Masters not found or are in the wrong order.\n");
     }
 
-    // Ïîëó÷àåì ðåãóëÿðíîå âûðàæåíèå è SQL çàïðîñ â çàâèñèìîñòè îò êîíâåðñèè
+    // Retrieve the regular expression and SQL query based on the conversion choice
     auto [jsonObjectRegex, query] = getJsonRegexAndQuery(ConversionChoice);
 
-    // Òåïåðü ìîæåì èñïîëüçîâàòü jsonObjectRegex è query
+    // Now we can use jsonObjectRegex and query
     std::string outputData = inputData;
     auto it = std::sregex_iterator(inputData.begin(), inputData.end(), jsonObjectRegex);
     auto end = std::sregex_iterator();
