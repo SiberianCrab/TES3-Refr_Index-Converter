@@ -379,7 +379,7 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
     // Check if there are any mismatches before prompting the user
     if (mismatchedEntries.empty()) {
         logMessage("No mismatches found. Skipping mismatch handling.");
-        return 0;  // or an appropriate value indicating no mismatches
+        return 0;
     }
 
     // Get user choice on how to handle mismatches
@@ -402,25 +402,6 @@ int processAndHandleMismatches(sqlite3* db, const std::string& query, const std:
     else {
         logMessage("\nMismatched entries will remain unchanged.");
     }
-
-    return mismatchChoice;
-}
-
-// Structure for returned values (regular expressions and SQL query)
-struct RegexQueryResult {
-    std::regex jsonObjectRegex;
-    std::string sqlQuery;
-};
-
-// Function to get the regular expression and SQL query based on the conversion choice
-RegexQueryResult getJsonRegexAndQuery(int conversionChoice) {
-    // Regular expression to find objects with the field "mast_index"
-    std::regex jsonObjectRegex(R"(\{[^{}]*\"mast_index\"[^\}]*\})");
-    // SQL query string based on the conversion choice
-    std::string sqlQuery = (conversionChoice == 1) ?
-        "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
-        "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
-    return { jsonObjectRegex, sqlQuery };
 }
 
 // Optimizes replacement of JSON refr_index values based on replacements map
@@ -461,10 +442,10 @@ void optimizeJsonReplacement(std::ostringstream& outputStream, std::string_view 
 }
 
 // Saves modified JSON data to file and logs success message
-bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string& outputData) {
+bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const std::string& inputData) {
     std::ofstream outputFile(jsonFilePath);
     if (outputFile) {
-        outputFile << outputData;
+        outputFile << inputData;
         logMessage("\nModified JSON saved as: " + jsonFilePath.string() + "\n");
         return true;
     }
@@ -548,13 +529,10 @@ int main() {
         logErrorAndExit(db, "Required Parent Masters not found or are in the wrong order.\n");
     }
 
-    // Retrieve the regular expression and SQL query based on the conversion choice
-    auto [jsonObjectRegex, query] = getJsonRegexAndQuery(ConversionChoice);
-
-    // Now we can use jsonObjectRegex and query
-    std::string outputData = inputData;
-    auto it = std::sregex_iterator(inputData.begin(), inputData.end(), jsonObjectRegex);
-    auto end = std::sregex_iterator();
+    // SQL query based on the conversion choice
+    std::string query = (ConversionChoice == 1) ?
+        "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
+        "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
     // Process mismatches between JSON and database refr_index values
     int mismatchChoice = processAndHandleMismatches(db, query, inputData, ConversionChoice, validMastersDB, replacements, mismatchedEntries);
@@ -573,11 +551,11 @@ int main() {
     // Prepare output JSON data with updated refr_index values
     std::ostringstream outputStream;
     optimizeJsonReplacement(outputStream, inputData, replacements);
-    outputData = outputStream.str();
+    inputData = outputStream.str();
 
     // Save modified JSON file with a new name indicating conversion direction
     std::filesystem::path newJsonFilePath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json");
-    if (!saveJsonToFile(newJsonFilePath, outputData)) {
+    if (!saveJsonToFile(newJsonFilePath, inputData)) {
         logErrorAndExit(db, "Error saving modified JSON file.\n");
     }
 
