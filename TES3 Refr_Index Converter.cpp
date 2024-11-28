@@ -14,7 +14,7 @@ using ordered_json = nlohmann::ordered_json;
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.0.3";
+const std::string PROGRAM_VERSION = "V 1.1.0";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 
 // Define sets to store valid master indices and masters from the database
