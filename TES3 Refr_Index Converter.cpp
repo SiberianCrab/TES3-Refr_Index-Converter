@@ -9,10 +9,10 @@
 #include <sqlite3.h>
 #include <json.hpp>
 
-// Use the ordered_json alias from the nlohmann JSON library
+// Define an alias for ordered JSON type from the nlohmann library
 using ordered_json = nlohmann::ordered_json;
 
-// Define program constants
+// Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
 const std::string PROGRAM_VERSION = "V 1.0.3";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
@@ -21,7 +21,7 @@ const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 std::unordered_set<int> validMastIndices;
 std::unordered_set<int> validMastersDB;
 
-// Function to log messages to a file and the console
+// Function to log messages to both a log file and console
 void logMessage(const std::string& message, const std::filesystem::path& logFilePath = "tes3_ri_log.txt") {
     std::ofstream logFile(logFilePath, std::ios_base::app);
 
@@ -35,7 +35,7 @@ void logMessage(const std::string& message, const std::filesystem::path& logFile
     std::cout << message << std::endl;
 }
 
-// Function to log an error message, close the database connection, and exit the program
+// Function to log errors, close the database (if open), and terminate the program
 void logErrorAndExit(sqlite3* db, const std::string& message) {
     logMessage(message);
 
@@ -71,7 +71,7 @@ int getUserConversionChoice() {
         std::string input;
         std::getline(std::cin, input);
         if (input == "1" || input == "2") {
-            ConversionChoice = input[0] - '0';
+            ConversionChoice = std::stoi(input);
             break;
         }
         logMessage("Invalid choice. Enter 1 or 2.");
@@ -107,6 +107,7 @@ std::filesystem::path getInputFilePath() {
         std::getline(std::cin, input);
         filePath = input;
 
+        // Convert the file extension to lowercase for case-insensitive comparison
         std::string extension = filePath.extension().string();
         std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
