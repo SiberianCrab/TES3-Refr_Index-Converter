@@ -14,8 +14,9 @@ using ordered_json = nlohmann::ordered_json;
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.1.0";
+const std::string PROGRAM_VERSION = "V 1.2.0";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
+const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
 
 // Define sets to store valid master indices and masters from the database
 std::unordered_set<int> validMastIndices;
@@ -336,7 +337,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
 
                             replacementsFlag = 1;
                         }
-                        else if (currentMastIndex == 2 || currentMastIndex == 3) {
+                        else if (validMastIndices.count(currentMastIndex) > 0) {
                             int dbRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(
                                 db, refrIndex, currentMastIndex, validMastersDB, conversionChoice);
                             std::string dbId = fetchValue<FETCH_DB_ID>(
@@ -373,24 +374,33 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
         for (const auto& entry : mismatchedEntries) {
             int refrIndex = entry.refrIndex;
             int dbRefrIndex = entry.dbRefrIndex;
+            const std::string& mismatchId = entry.id;
 
             if (dbRefrIndex != -1) {
-
                 for (auto& cell : inputData) {
                     if (cell.contains("references") && cell["references"].is_array()) {
                         for (auto& reference : cell["references"]) {
                             if (reference["refr_index"] == refrIndex) {
-                                reference["refr_index"] = dbRefrIndex;
-                                break;
+                                int currentMastIndex = reference.contains("mast_index") && reference["mast_index"].is_number_integer()
+                                    ? reference["mast_index"].get<int>()
+                                    : -1;
+
+                                std::string refId = reference.contains("id") && reference["id"].is_string()
+                                    ? reference["id"].get<std::string>()
+                                    : "";
+
+                                // Check both mast_index and id match
+                                if (validMastIndices.count(currentMastIndex) > 0 && refId == mismatchId) {
+                                    reference["refr_index"] = dbRefrIndex;
+                                    logMessage("Replaced mismatched JSON refr_index " + std::to_string(refrIndex) +
+                                        " with DB refr_index: " + std::to_string(dbRefrIndex) +
+                                        " for id: " + refId);
+                                    replacementsFlag = 1;
+                                }
                             }
                         }
                     }
                 }
-
-                logMessage("Replaced mismatched JSON refr_index " + std::to_string(refrIndex) +
-                    " with DB refr_index: " + std::to_string(dbRefrIndex));
-
-                replacementsFlag = 1;
             }
         }
     }
@@ -425,7 +435,7 @@ bool convertJsonToEsp(const std::filesystem::path& jsonFilePath, const std::file
 // Main function
 int main() {
     // Display program information
-    std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n" << PROGRAM_AUTHOR << "\n\n";
+    std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n" << PROGRAM_AUTHOR << "\n\n" << PROGRAM_TESTER << "\n\n";
 
     // Clear the log file
     clearLogFile("tes3_ri_log.txt");
