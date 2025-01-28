@@ -63,42 +63,52 @@ void clearLogFile(const std::filesystem::path& logFileName = "tes3_ri_log.txt") 
     }
 }
 
-// Function to get the user's conversion choice
+// Unified function for handling user choices
+int getUserChoice(const std::string& prompt,
+    const std::unordered_set<std::string>& validChoices,
+    const std::string& errorMessage = "Invalid choice: enter ")
+{
+    std::string input;
+    while (true) {
+        std::cout << prompt;
+        std::getline(std::cin, input);
+
+        if (validChoices.count(input)) {
+            return std::stoi(input);
+        }
+
+        // List of valid options for the error message
+        std::string validOptions;
+        for (const auto& option : validChoices) {
+            if (!validOptions.empty()) validOptions += " or ";
+            validOptions += option;
+        }
+        logMessage(errorMessage + validOptions + ".\n");
+    }
+}
+
+// Function for handling conversion choises
 int getUserConversionChoice() {
-    int ConversionChoice;
-    while (true) {
-        std::cout << "Convert refr_index data in a plugin or master file:\n"
-            "1. From Russian 1C to English GOTY\n2. From English GOTY to Russian 1C\nChoice: ";
-        std::string input;
-        std::getline(std::cin, input);
-        if (input == "1" || input == "2") {
-            ConversionChoice = std::stoi(input);
-            break;
-        }
-        logMessage("Invalid choice. Enter 1 or 2.");
-    }
-    return ConversionChoice;
+    return getUserChoice(
+        "Convert refr_index data in a plugin or master file:\n"
+        "1. From Russian 1C to English GOTY\n"
+        "2. From English GOTY to Russian 1C\n"
+        "Choice: ",
+        { "1", "2" }
+    );
 }
 
-// Function to get the user's choice for handling mismatched entries
+// Function for handling mismatches
 int getUserMismatchChoice() {
-    int mismatchChoice;
-    while (true) {
-        std::cout << "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
-            "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
-            "1.Yes\n2.No\nChoice: ";
-        std::string input;
-        std::getline(std::cin, input);
-        if (input == "1" || input == "2") {
-            mismatchChoice = std::stoi(input);
-            break;
-        }
-        logMessage("Invalid choice. Enter 1 or 2.");
-    }
-    return mismatchChoice;
+    return getUserChoice(
+        "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
+        "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
+        "1.Yes\n2.No\nChoice: ",
+        { "1", "2" }
+    );
 }
 
-// Function to get the input file path from the user
+// Function for handling input file path from user
 std::filesystem::path getInputFilePath() {
     std::filesystem::path filePath;
     while (true) {
@@ -117,7 +127,7 @@ std::filesystem::path getInputFilePath() {
             logMessage("Input file found: " + filePath.string());
             break;
         }
-        logMessage("Input file not found or incorrect extension.");
+        logMessage("Input file not found or incorrect extension.\n");
     }
     return filePath;
 }
