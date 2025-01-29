@@ -1,5 +1,7 @@
 ﻿#include <cctype>
 #include <filesystem>
+#include <cstdlib>
+#include <optional>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -9,12 +11,12 @@
 #include <sqlite3.h>
 #include <json.hpp>
 
-// Define an alias for ordered JSON type from the nlohmann library
+// Define an alias for ordered_json type from the nlohmann library
 using ordered_json = nlohmann::ordered_json;
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.2.0";
+const std::string PROGRAM_VERSION = "V 1.2.1";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
 
@@ -30,7 +32,7 @@ void logMessage(const std::string& message, const std::filesystem::path& logFile
         logFile << message << std::endl;
     }
     else {
-        std::cerr << "Failed to open log file." << std::endl;
+        std::cerr << "Failed to open log file" << std::endl;
     }
 
     std::cout << message << std::endl;
@@ -47,7 +49,7 @@ void logErrorAndExit(sqlite3* db, const std::string& message) {
     std::cout << "Press Enter to continue...";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    throw std::runtime_error(message);
+    std::exit(EXIT_FAILURE);
 }
 
 // Function to clear the log file
@@ -83,14 +85,14 @@ int getUserChoice(const std::string& prompt,
             if (!validOptions.empty()) validOptions += " or ";
             validOptions += option;
         }
-        logMessage(errorMessage + validOptions + ".\n");
+        logMessage(errorMessage + validOptions);
     }
 }
 
 // Function for handling conversion choises
 int getUserConversionChoice() {
     return getUserChoice(
-        "Convert refr_index data in a plugin or master file:\n"
+        "\nConvert refr_index values in a plugin or master file:\n"
         "1. From Russian 1C to English GOTY\n"
         "2. From English GOTY to Russian 1C\n"
         "Choice: ",
@@ -103,7 +105,9 @@ int getUserMismatchChoice() {
     return getUserChoice(
         "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
         "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
-        "1.Yes\n2.No\nChoice: ",
+        "1.Yes\n"
+        "2.No\n"
+        "Choice: ",
         { "1", "2" }
     );
 }
@@ -112,8 +116,8 @@ int getUserMismatchChoice() {
 std::filesystem::path getInputFilePath() {
     std::filesystem::path filePath;
     while (true) {
-        std::cout << "Enter full path to your .ESP or .ESM (including extension), or filename (with extension)\n"
-            "if it's in the same directory with this program: ";
+        std::cout << "\nEnter full path to your .ESP|ESM, or just filename (with extension),\n"
+                     "if your .ESP|ESM is in the same directory with this program: ";
         std::string input;
         std::getline(std::cin, input);
         filePath = input;
@@ -127,25 +131,25 @@ std::filesystem::path getInputFilePath() {
             logMessage("Input file found: " + filePath.string());
             break;
         }
-        logMessage("Input file not found or incorrect extension.\n");
+        logMessage("ERROR - input file not found: check its directory, name and extension\n");
     }
     return filePath;
 }
 
-// Function to check the dependency order of the masters in the input data
+// Function to check the dependency order of Parent Master files in the input .ESP|ESM data
 std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json& inputData) {
     auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const ordered_json& item) {
         return item.contains("type") && item["type"] == "Header";
         });
 
     if (headerIter == inputData.end() || !headerIter->contains("masters")) {
-        logMessage("Error: Missing 'Header' section or 'masters' key.");
+        logMessage("ERROR - missing 'header' section or 'masters' key");
         return { false, {} };
     }
 
     const auto& masters = (*headerIter)["masters"];
 
-    size_t mwPos = static_cast<size_t>(-1), tPos = static_cast<size_t>(-1), bPos = static_cast<size_t>(-1);
+    size_t mwPos = -1, tPos = -1, bPos = -1;
 
     for (size_t i = 0; i < masters.size(); ++i) {
         if (masters[i].is_array() && !masters[i].empty() && masters[i][0].is_string()) {
@@ -157,32 +161,32 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
     }
 
     if (mwPos == static_cast<size_t>(-1)) {
-        logMessage("Morrowind.esm not found!");
+        logMessage("ERROR - Morrowind.esm dependency not found");
         return { false, {} };
     }
 
     if (tPos != static_cast<size_t>(-1) && bPos != static_cast<size_t>(-1)) {
         if (tPos > mwPos && bPos > tPos) {
-            logMessage("Valid order of Parent Masters found: M+T+B.\n");
+            logMessage("Valid order of Parent Master files found: M+T+B\n");
             validMastIndices = { 2, 3 };
             validMastersDB = { 1 };
             return { true, validMastersDB };
         }
         else {
-            logMessage("Invalid order of Parent Masters! Tribunal.esm should be before Bloodmoon.esm.\n");
+            logMessage("ERROR - invalid order of Parent Master files found: M+B+T\n");
             return { false, {} };
         }
     }
 
     if (tPos != static_cast<size_t>(-1) && tPos > mwPos) {
-        logMessage("Valid order of Parent Masters found: M+T.\n");
+        logMessage("Valid order of Parent Master files found: M+T\n");
         validMastIndices = { 2 };
         validMastersDB = { 2 };
         return { true, validMastersDB };
     }
 
     if (bPos != static_cast<size_t>(-1) && bPos > mwPos) {
-        logMessage("Valid order of Parent Masters found: M+B.\n");
+        logMessage("Valid order of Parent Master files found: M+B\n");
         validMastIndices = { 2 };
         validMastersDB = { 3 };
         return { true, validMastersDB };
@@ -192,26 +196,31 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
 }
 
 // Function to fetch the refr_index from the database
-int fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const std::string& id) {
-    int result = -1;
-    sqlite3_stmt* stmt;
-    sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr);
+std::optional<int> fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const std::string& id) {
+    sqlite3_stmt* stmt = nullptr;
 
-    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_int(stmt, 1, refrIndex);
-        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_STATIC);
-
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            result = sqlite3_column_int(stmt, 0);
-        }
-    }
-    else {
-        logMessage("Database query error: " + std::string(sqlite3_errmsg(db)));
+    // Prepare the SQL query
+    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        logMessage("Prepare failed: " + std::string(sqlite3_errmsg(db)));
+        return std::nullopt;
     }
 
-    sqlite3_finalize(stmt);
-    return result;
+    // Automatically release memory when exiting the function
+    std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt_ptr(stmt, sqlite3_finalize);
+
+    // Bind parameters
+    sqlite3_bind_int(stmt, 1, refrIndex);
+    sqlite3_bind_text(stmt, 2, id.c_str(), id.length(), SQLITE_STATIC);
+
+    // Execute the query
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        // Assume the data is always valid
+        return sqlite3_column_int(stmt, 0);
+    }
+    // Return if no data is found
+    return std::nullopt;
 }
+
 // Define an enumeration for fetch modes
 enum FetchMode {
     FETCH_DB_ID,
@@ -235,7 +244,7 @@ auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_
             : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ?";
         break;
     default:
-        std::cerr << "Invalid conversion choice." << std::endl;
+        std::cerr << "Invalid conversion choice" << std::endl;
         if constexpr (mode == FETCH_DB_ID) {
             return std::string();
         }
@@ -325,7 +334,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
                     for (auto& reference : cell["references"]) {
                         if (!reference.contains("refr_index") || !reference["refr_index"].is_number_integer() ||
                             !reference.contains("id") || !reference["id"].is_string()) {
-                            logMessage("Skipping invalid reference: missing 'refr_index' or 'id'.");
+                            logMessage("Skipping invalid reference: missing 'refr_index' or 'id'");
                             continue;
                         }
 
@@ -336,14 +345,16 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
                             ? reference["mast_index"].get<int>()
                             : -1;
 
-                        int newRefrIndex = fetchRefIndex(db, query, refrIndex, id);
+                        std::optional<int> newRefrIndex = fetchRefIndex(db, query, refrIndex, id);
 
-                        if (newRefrIndex != -1) {
+                        if (auto optionalNewRefrIndex = fetchRefIndex(db, query, refrIndex, id); optionalNewRefrIndex.has_value()) {
+                            int newRefrIndex = optionalNewRefrIndex.value();
+
                             reference["refr_index"] = newRefrIndex;
 
                             logMessage("Replaced JSON refr_index " + std::to_string(refrIndex) +
-                                " with DB refr_index " + std::to_string(newRefrIndex) +
-                                " for JSON id: " + id);
+                                       " with DB refr_index " + std::to_string(newRefrIndex) +
+                                       " for JSON id: " + id);
 
                             replacementsFlag = 1;
                         }
@@ -356,24 +367,24 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
                             mismatchedEntries.emplace_back(MismatchEntry{ refrIndex, id, dbId, dbRefrIndex });
 
                             logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndex) +
-                                " and JSON id: " + id + " with DB refr_index: " + std::to_string(dbRefrIndex) +
-                                " and DB id: " + dbId);
+                                       " and JSON id: " + id + " with DB refr_index: " + std::to_string(dbRefrIndex) +
+                                       " and DB id: " + dbId);
                         }
                     }
                 }
                 else {
-                    logMessage("Skipping 'Cell' object as it does not contain valid 'references' array.");
+                    logMessage("Skipping 'Cell' object as it does not contain valid 'references' array");
                 }
             }
         }
     }
     else {
-        logMessage("\nInput JSON is not an array, unable to process.");
+        logMessage("\nInput JSON is not an array, unable to process");
         return -1;
     }
 
     if (mismatchedEntries.empty()) {
-        logMessage("\nNo mismatches found. Skipping mismatch handling.");
+        logMessage("\nNo mismatches found: skipping mismatch handling");
         return 0;
     }
 
@@ -403,8 +414,8 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
                                 if (validMastIndices.count(currentMastIndex) > 0 && refId == mismatchId) {
                                     reference["refr_index"] = dbRefrIndex;
                                     logMessage("Replaced mismatched JSON refr_index " + std::to_string(refrIndex) +
-                                        " with DB refr_index: " + std::to_string(dbRefrIndex) +
-                                        " for id: " + refId);
+                                               " with DB refr_index: " + std::to_string(dbRefrIndex) +
+                                               " for JSON id: " + refId);
                                     replacementsFlag = 1;
                                 }
                             }
@@ -415,30 +426,30 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
         }
     }
     else {
-        logMessage("\nMismatched entries will remain unchanged.");
+        logMessage("\nMismatched entries will remain unchanged...");
     }
 
     return 0;
 }
 
-// Function to save the modified JSON to a file
+// Function to save the modified JSON data to file
 bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const ordered_json& inputData) {
     std::ofstream outputFile(jsonFilePath);
     if (outputFile) {
         outputFile << std::setw(2) << inputData;
-        logMessage("\nModified JSON saved as: " + jsonFilePath.string() + "\n");
+        logMessage("\nModified data saved as: " + jsonFilePath.string() + "\n");
         return true;
     }
     return false;
 }
 
-// Function to convert the JSON file to an ESP file
+// Function to convert the .JSON file to .ESP|ESM
 bool convertJsonToEsp(const std::filesystem::path& jsonFilePath, const std::filesystem::path& espFilePath) {
     std::string command = "tes3conv.exe \"" + jsonFilePath.string() + "\" \"" + espFilePath.string() + "\"";
     if (std::system(command.c_str()) != 0) {
         return false;
     }
-    logMessage("Final conversion to ESM/ESP successful: " + espFilePath.string() + "\n");
+    logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string() + "\n");
     return true;
 }
 
@@ -453,107 +464,110 @@ int main() {
     // Check if the database file exists
     std::filesystem::path dbFilePath = "tes3_ri_en-ru_refr_index.db";
     if (!std::filesystem::exists(dbFilePath)) {
-        logErrorAndExit(nullptr, "Database file 'tes3_ri_en-ru_refr_index.db' not found.\n");
+        logErrorAndExit(nullptr, "ERROR - database file 'tes3_ri_en-ru_refr_index.db' not found\n");
     }
 
     // Open the database
     sqlite3* db = nullptr;
+
     if (sqlite3_open(dbFilePath.string().c_str(), &db)) {
-        logErrorAndExit(db, "Failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n");
+        logErrorAndExit(db, "ERROR - failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n");
     }
     logMessage("Database opened successfully...");
 
     // Check if the converter executable exists
     std::filesystem::path converterPath = "tes3conv.exe";
     if (!std::filesystem::exists(converterPath)) {
-        logErrorAndExit(db, "tes3conv.exe not found. Please download the latest version from\n"
-            "https://github.com/Greatness7/tes3conv/releases and place it in\nthe same directory with this program.\n");
+        logErrorAndExit(db, "ERROR - tes3conv.exe not found! Please download the latest version from\n"
+                            "https://github.com/Greatness7/tes3conv/releases and place it in\n"
+                            "the same directory with this program\n");
     }
-    logMessage("tes3conv.exe found...\nInitialisation complete.\n");
+    logMessage("tes3conv.exe found...\n"
+               "Initialisation complete.");
 
-    // Get the user's conversion choice
+    // Get the conversion choice from user
     int ConversionChoice = getUserConversionChoice();
 
-    // Get the input file path from the user
+    // Get the input file path from user
     std::filesystem::path inputFilePath = getInputFilePath();
     std::filesystem::path inputPath(inputFilePath);
 
-    // Define the output directory and JSON file path
+    // Define the output file path
     std::filesystem::path outputDir = inputPath.parent_path();
     std::filesystem::path jsonFilePath = outputDir / (inputPath.stem() += ".json");
 
-    // Convert the input file to JSON
+    // Convert the input file to .JSON
     std::string command = "tes3conv.exe \"" + inputPath.string() + "\" \"" + jsonFilePath.string() + "\"";
     if (std::system(command.c_str()) != 0) {
-        logErrorAndExit(db, "Error converting to JSON. Check tes3conv.exe and the input file.\n");
+        logErrorAndExit(db, "ERROR - converting to .JSON failed\n");
     }
-    logMessage("Conversion to JSON successful: " + jsonFilePath.string());
+    logMessage("Conversion to .JSON successful: " + jsonFilePath.string());
 
-    // Read the JSON file
+    // Load the generated JSON file into a JSON object
     std::ifstream inputFile(jsonFilePath);
     if (!inputFile) {
-        logErrorAndExit(db, "Failed to open JSON file for reading: " + jsonFilePath.string() + "\n");
+        logErrorAndExit(db, "ERROR - failed to open .JSON file for reading: " + jsonFilePath.string() + "\n");
     }
     ordered_json inputData;
     inputFile >> inputData;
     inputFile.close();
 
-    // Initialize the replacements flag
-    int replacementsFlag = 0;
-
-    // Check the dependency order of the masters in the input data
+    // Check the dependency order of the Parent Master files in the input data
     auto [isValid, validMastersDB] = checkDependencyOrder(inputData);
     if (!isValid) {
         if (std::filesystem::exists(jsonFilePath)) {
             std::filesystem::remove(jsonFilePath);
-            logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
+            logMessage("Temporary .JSON file deleted: " + jsonFilePath.string() + "\n");
         }
-        logErrorAndExit(db, "Required Parent Masters not found or are in the wrong order.\n");
+        logErrorAndExit(db, "ERROR - required Parent Master files dependency not found, or theit order is invalid\n");
     }
 
-    // Define the query based on the conversion choice
+    // Initialize the replacements flag
+    int replacementsFlag = 0;
+
+    // Initialize the query based on user conversion choice
     std::string query = (ConversionChoice == 1) ?
         "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;" :
         "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
-    // Process replacements and mismatches
+    // Process replacements
     processReplacementsAndMismatches(db, query, inputData, ConversionChoice, replacementsFlag, validMastersDB, mismatchedEntries);
 
-    // Check if any replacements were made
+    // Check if any replacements were made: if no replacements were found, cancel the conversion
     if (replacementsFlag == 0) {
         if (std::filesystem::exists(jsonFilePath)) {
             std::filesystem::remove(jsonFilePath);
-            logMessage("Temporary JSON file deleted: " + jsonFilePath.string() + "\n");
+            logMessage("Temporary .JSON file deleted: " + jsonFilePath.string() + "\n");
         }
-        logErrorAndExit(db, "No replacements found. Conversion canceled.\n");
+        logErrorAndExit(db, "No replacements found: conversion canceled\n");
     }
 
-    // Define the new JSON file path
+    // Define the new .JSON file path
     std::filesystem::path newJsonFilePath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + ".json");
 
-    // Save the modified JSON to a file
+    // Save the modified data to.JSON file
     if (!saveJsonToFile(newJsonFilePath, inputData)) {
-        logErrorAndExit(db, "Error saving modified JSON file.\n");
+        logErrorAndExit(db, "ERROR - failed to save modified data to .JSON file\n");
     }
 
-    // Define the output file path for the converted ESP/ESM
+    // Define the output file path for the converted .ESP|ESM
     std::filesystem::path outputExtension = inputPath.extension();
     std::filesystem::path newEspPath = outputDir / ("CONV_" + std::string(ConversionChoice == 1 ? "RUtoEN" : "ENtoRU") + "_" + inputPath.stem().string() + outputExtension.string());
 
-    // Convert the JSON file back to ESP/ESM
+    // Convert the .JSON file back to .ESP|ESM
     if (!convertJsonToEsp(newJsonFilePath, newEspPath)) {
-        logErrorAndExit(db, "Error converting JSON back to ESM/ESP.\n");
+        logErrorAndExit(db, "ERROR - failed to convert .JSON back to .ESP|ESM\n");
     }
 
-    // Clean up temporary JSON files
+    // Clean up temporary .JSON files
     if (std::filesystem::exists(jsonFilePath)) std::filesystem::remove(jsonFilePath);
     if (std::filesystem::exists(newJsonFilePath)) std::filesystem::remove(newJsonFilePath);
-    logMessage("Temporary JSON files deleted: " + jsonFilePath.string() + "\n" + 
-               "                         and: " + newJsonFilePath.string() + "\n");
+    logMessage("Temporary .JSON files deleted: " + jsonFilePath.string() + "\n" +
+               "                          and: " + newJsonFilePath.string() + "\n");
 
     // Close the database
     sqlite3_close(db);
-    logMessage("The ending of the words is ALMSIVI.\n");
+    logMessage("The ending of the words is ALMSIVI\n");
 
     // Wait for user input before exiting
     std::cout << "Press Enter to continue...";
