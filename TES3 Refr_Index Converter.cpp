@@ -115,7 +115,7 @@ std::filesystem::path getInputFilePath(std::ofstream& logFile) {
             logMessage("Input file found: " + filePath.string(), logFile);
             break;
         }
-        logMessage("ERROR - input file not found: check its directory, name and extension\n", logFile);
+        logMessage("\nERROR - input file not found: check its directory, name and extension", logFile);
     }
     return filePath;
 }
@@ -180,15 +180,15 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
 }
 
 // Function to fetch the refr_index from the database
-std::optional<int> fetchRefIndex(sqlite3* db, const std::string& query, int refrIndex, const std::string& id) {
+std::optional<int> fetchRefIndex(sqlite3* db, const std::string& query, int refrIndexJSON, const std::string& idJSON) {
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
         return std::nullopt;
     }
 
     std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt_ptr(stmt, sqlite3_finalize);
-    sqlite3_bind_int(stmt, 1, refrIndex);
-    sqlite3_bind_text(stmt, 2, id.c_str(), id.length(), SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 1, refrIndexJSON);
+    sqlite3_bind_text(stmt, 2, idJSON.c_str(), idJSON.length(), SQLITE_STATIC);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         return sqlite3_column_int(stmt, 0);
@@ -204,7 +204,7 @@ enum FetchMode {
 
 // Template function to fetch values from the database based on the fetch mode
 template <FetchMode mode>
-auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_set<int>& validMastersDB, int conversionChoice) {
+auto fetchValue(sqlite3* db, int refrIndexJSON, int mastIndex, const std::unordered_set<int>& validMastersDB, int conversionChoice) {
     std::string query;
 
     // Determine the query based on the conversion choice and fetch mode
@@ -238,36 +238,36 @@ auto fetchValue(sqlite3* db, int refrIndex, int mastIndex, const std::unordered_
         else return -1;
     }
 
-    sqlite3_bind_int(stmt, 1, refrIndex);
+    sqlite3_bind_int(stmt, 1, refrIndexJSON);
 
     // Fetch the value based on the fetch mode
     if constexpr (mode == FETCH_DB_ID) {
-        std::string dbId;
+        std::string idDB;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char* id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            if (id) dbId = id;
+            const char* idJSON = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            if (idJSON) idDB = idJSON;
         }
         sqlite3_finalize(stmt);
-        return dbId;
+        return idDB;
     }
     else {
-        int dbRefrIndex = -1;
+        int refrIndexDB = -1;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
-            dbRefrIndex = sqlite3_column_int(stmt, 0);
+            refrIndexDB = sqlite3_column_int(stmt, 0);
         }
         sqlite3_finalize(stmt);
-        return dbRefrIndex;
+        return refrIndexDB;
     }
 }
 // Mismatch entry structure to store reference data discrepancies
 struct MismatchEntry {
-    int refrIndex;        // Reference index from JSON
-    std::string id;       // Object ID from JSON
-    std::string dbId;     // Expected ID from database
-    int dbRefrIndex;      // Expected reference index from database
+    int refrIndexJSON;        // Reference index from JSON
+    std::string idJSON;       // Object ID from JSON
+    std::string idDB;     // Expected ID from database
+    int refrIndexDB;      // Expected reference index from database
 
     bool operator==(const MismatchEntry& other) const noexcept {
-        return refrIndex == other.refrIndex && id == other.id;
+        return refrIndexJSON == other.refrIndexJSON && idJSON == other.idJSON;
     }
 };
 
@@ -275,9 +275,9 @@ struct MismatchEntry {
 namespace std {
     template<> struct hash<MismatchEntry> {
         size_t operator()(const MismatchEntry& e) const noexcept {
-            return hash<int>{}(e.refrIndex) ^
-                (hash<string>{}(e.id) << 1) ^
-                (hash<string>{}(e.id) >> (sizeof(size_t) * CHAR_BIT - 1));
+            return hash<int>{}(e.refrIndexJSON) ^
+                (hash<string>{}(e.idJSON) << 1) ^
+                (hash<string>{}(e.idJSON) >> (sizeof(size_t) * CHAR_BIT - 1));
         }
     };
 }
@@ -322,35 +322,35 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
             }
 
             // Extract reference data
-            int current_refrIndex = refr_index["refr_index"];
-            std::string current_id = refr_index["id"];
-            int current_mastIndex = refr_index.value("mast_index", -1);
+            int refrIndexExtracted = refr_index["refr_index"];
+            std::string idExtracted = refr_index["id"];
+            int mastIndexExtracted = refr_index.value("mast_index", -1);
 
             // Attempt direct replacement from database
-            if (auto new_refrIndex = fetchRefIndex(db, query, current_refrIndex, current_id)) {
+            if (auto new_refrIndex = fetchRefIndex(db, query, refrIndexExtracted, idExtracted)) {
                 // Successful replacement
                 refr_index["refr_index"] = *new_refrIndex;
-                logMessage("Replaced JSON refr_index " + std::to_string(current_refrIndex) +
+                logMessage("Replaced JSON refr_index " + std::to_string(refrIndexExtracted) +
                            " with DB refr_index " + std::to_string(*new_refrIndex) +
-                           " for JSON id: " + current_id, logFile);
+                           " for JSON id: " + idExtracted, logFile);
                 replacementsFlag = 1;
             }
 
             // Handle mismatches for valid master indices
-            else if (validMastersIN.count(current_mastIndex)) {
+            else if (validMastersIN.count(mastIndexExtracted)) {
                 // Get reference values from database
-                const int dbRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(
-                    db, current_refrIndex, current_mastIndex, validMastersDB, conversionChoice);
-                const std::string dbId = fetchValue<FETCH_DB_ID>(
-                    db, current_refrIndex, current_mastIndex, validMastersDB, conversionChoice);
-                logMessage("Mismatch found for JSON refr_index " + std::to_string(current_refrIndex) +
-                           " and JSON id: " + current_id + " with DB refr_index: " + std::to_string(dbRefrIndex) +
-                           " and DB id: " + dbId, logFile);
+                const int refrIndexDB = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(
+                    db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+                const std::string idDB = fetchValue<FETCH_DB_ID>(
+                    db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+                logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndexExtracted) +
+                           " and JSON id: " + idExtracted + " with DB refr_index: " + std::to_string(refrIndexDB) +
+                           " and DB id: " + idDB, logFile);
 
                 // Add to mismatch tracking (auto-deduplicated)
                 if (auto [it, inserted] = mismatchedEntries.emplace(
-                    MismatchEntry{ current_refrIndex, current_id, dbId, dbRefrIndex }); !inserted) {
-                    logMessage("Duplicate mismatch entry: " + std::to_string(current_refrIndex) + " - " + current_id, logFile);
+                    MismatchEntry{ refrIndexExtracted, idExtracted, idDB, refrIndexDB }); !inserted) {
+                    logMessage("Duplicate mismatch entry: " + std::to_string(refrIndexExtracted) + " - " + idExtracted, logFile);
                 }
             }
         }
@@ -367,12 +367,12 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
 
                 // Find and update matching references
                 for (auto& reference : cell["references"]) {
-                    if (reference["refr_index"] == entry.refrIndex &&
-                        reference.value("id", "") == entry.id) {
-                        reference["refr_index"] = entry.dbRefrIndex;
-                        logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndex) +
-                                   " with DB refr_index: " + std::to_string(entry.dbRefrIndex) +
-                                   " for JSON id: " + entry.id, logFile);
+                    if (reference["refr_index"] == entry.refrIndexJSON &&
+                        reference.value("id", "") == entry.idJSON) {
+                        reference["refr_index"] = entry.refrIndexDB;
+                        logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJSON) +
+                                   " with DB refr_index: " + std::to_string(entry.refrIndexDB) +
+                                   " for JSON id: " + entry.idJSON, logFile);
                         replacementsFlag = 1;
                     }
                 }
