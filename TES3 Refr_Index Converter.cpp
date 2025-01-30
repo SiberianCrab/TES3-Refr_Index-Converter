@@ -21,11 +21,11 @@ const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
 
 // Define sets to store valid master indices and masters from the database
-std::unordered_set<int> validMastIndices;
+std::unordered_set<int> validMastersIN;
 std::unordered_set<int> validMastersDB;
 
 // Function to clear log file
-void clearLogFile() {
+void logClear() {
     std::ofstream file("tes3_ri_log.txt", std::ios::trunc);
 }
 
@@ -148,13 +148,13 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
         return { false, {} };
     }
 
-    validMastIndices.clear();
+    validMastersIN.clear();
     validMastersDB.clear();
 
     if (tPos.has_value() && bPos.has_value()) {
         if (*tPos > *mwPos && *bPos > *tPos) {
             logMessage("Valid order of Parent Master files found: M+T+B\n", logFile);
-            validMastIndices = { 2, 3 };
+            validMastersIN = { 2, 3 };
             validMastersDB = { 1 };
             return { true, validMastersDB };
         }
@@ -164,14 +164,14 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
 
     if (tPos.has_value() && *tPos > *mwPos) {
         logMessage("Valid order of Parent Master files found: M+T\n", logFile);
-        validMastIndices = { 2 };
+        validMastersIN = { 2 };
         validMastersDB = { 2 };
         return { true, validMastersDB };
     }
 
     if (bPos.has_value() && *bPos > *mwPos) {
         logMessage("Valid order of Parent Master files found: M+B\n", logFile);
-        validMastIndices = { 2 };
+        validMastersIN = { 2 };
         validMastersDB = { 3 };
         return { true, validMastersDB };
     }
@@ -337,7 +337,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
             }
 
             // Handle mismatches for valid master indices
-            else if (validMastIndices.count(current_mastIndex)) {
+            else if (validMastersIN.count(current_mastIndex)) {
                 // Get reference values from database
                 const int dbRefrIndex = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(
                     db, current_refrIndex, current_mastIndex, validMastersDB, conversionChoice);
@@ -386,19 +386,19 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
 }
 
 // Function to save the modified JSON data to file
-bool saveJsonToFile(const std::filesystem::path& jsonFilePath, const ordered_json& inputData, std::ofstream& logFile) {
-    std::ofstream outputFile(jsonFilePath);
-    if (!outputFile) return false;
-    outputFile << std::setw(2) << inputData;
-    logMessage("\nModified data saved as: " + jsonFilePath.string() + "\n", logFile);
+bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_json& inputData, std::ofstream& logFile) {
+    std::ofstream outputFile(jsonImportPath);
+        if (!outputFile) return false;
+            outputFile << std::setw(2) << inputData;
+            logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
     return true;
 }
 
 // Function to convert the .JSON file to .ESP|ESM
-bool convertJsonToEsp(const std::filesystem::path& jsonFilePath, const std::filesystem::path& espFilePath, std::ofstream& logFile) {
-    std::string command = "tes3conv.exe \"" + jsonFilePath.string() + "\" \"" + espFilePath.string() + "\"";
-    if (std::system(command.c_str()) != 0) return false;
-    logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string() + "\n", logFile);
+bool convertJsonToEsp(const std::filesystem::path& jsonImportPath, const std::filesystem::path& espFilePath, std::ofstream& logFile) {
+    std::string command = "tes3conv.exe \"" + jsonImportPath.string() + "\" \"" + espFilePath.string() + "\"";
+        if (std::system(command.c_str()) != 0) return false;
+            logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string() + "\n", logFile);
     return true;
 }
 
@@ -416,7 +416,7 @@ int main() {
     }
 
     // Clear log file
-    clearLogFile();
+    logClear();
     logMessage("Log file cleared...", logFile);
 
     // Check if the database file exists
@@ -444,20 +444,20 @@ int main() {
     int conversionChoice = getUserConversionChoice(logFile);
 
     // Get the input file path from user
-    std::filesystem::path inputPath = getInputFilePath(logFile);
+    std::filesystem::path pluginImportPath = getInputFilePath(logFile);
 
     // Define the output file path
-    std::filesystem::path jsonFilePath = inputPath.parent_path() / (inputPath.stem().string() + ".json");
+    std::filesystem::path jsonImportPath = pluginImportPath.parent_path() / (pluginImportPath.stem().string() + ".json");
 
     // Convert the input file to .JSON
-    std::string command = "tes3conv.exe \"" + inputPath.string() + "\" \"" + jsonFilePath.string() + "\"";
+    std::string command = "tes3conv.exe \"" + pluginImportPath.string() + "\" \"" + jsonImportPath.string() + "\"";
     if (std::system(command.c_str()) != 0) {
         logErrorAndExit(db, "ERROR - converting to .JSON failed\n", logFile);
     }
-    logMessage("Conversion to .JSON successful: " + jsonFilePath.string(), logFile);
+    logMessage("Conversion to .JSON successful: " + jsonImportPath.string(), logFile);
 
     // Load the generated JSON file into a JSON object
-    std::ifstream inputFile(jsonFilePath);
+    std::ifstream inputFile(jsonImportPath);
     ordered_json inputData;
     inputFile >> inputData;
     inputFile.close();
@@ -465,8 +465,8 @@ int main() {
     // Check the dependency order of the Parent Master files in the input data
     auto [isValid, validMasters] = checkDependencyOrder(inputData, logFile);
     if (!isValid) {
-        std::filesystem::remove(jsonFilePath);
-        logMessage("Temporary .JSON file deleted: " + jsonFilePath.string() + "\n", logFile);
+        std::filesystem::remove(jsonImportPath);
+        logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
         logErrorAndExit(db, "ERROR - required Parent Master files dependency not found, or theit order is invalid\n", logFile);
     }
 
@@ -485,8 +485,8 @@ int main() {
 
     // Check if any replacements were made: if no replacements were found, cancel the conversion
     if (replacementsFlag == 0) {
-        std::filesystem::remove(jsonFilePath);
-        logMessage("Temporary .JSON file deleted: " + jsonFilePath.string() + "\n", logFile);
+        std::filesystem::remove(jsonImportPath);
+        logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
         logErrorAndExit(db, "No replacements found: conversion canceled\n", logFile);
     }
 
@@ -494,26 +494,26 @@ int main() {
     std::string convPrefix = (conversionChoice == 1) ? "RUtoEN" : "ENtoRU";
 
     // Save the modified data to.JSON file
-    auto newJsonName = std::format("CONV_{}_{}{}", convPrefix, inputPath.stem().string(), ".json");
+    auto newJsonName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), ".json");
 
-    std::filesystem::path newJsonPath = inputPath.parent_path() / newJsonName;
-    if (!saveJsonToFile(newJsonPath, inputData, logFile)) {
+    std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
+    if (!saveJsonToFile(jsonExportPath, inputData, logFile)) {
         logErrorAndExit(db, "ERROR - failed to save modified data to .JSON file\n", logFile);
     }
 
     // Convert the .JSON file back to .ESP|ESM
-    auto newEspName = std::format("CONV_{}_{}{}", convPrefix, inputPath.stem().string(), inputPath.extension().string());
+    auto pluginExportName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), pluginImportPath.extension().string());
 
-    std::filesystem::path newEspPath = inputPath.parent_path() / newEspName;
-    if (!convertJsonToEsp(newJsonPath, newEspPath, logFile)) {
+    std::filesystem::path pluginExportPath = pluginImportPath.parent_path() / pluginExportName;
+    if (!convertJsonToEsp(jsonExportPath, pluginExportPath, logFile)) {
         logErrorAndExit(db, "ERROR - failed to convert .JSON back to .ESP|ESM\n", logFile);
     }
 
     // Clean up temporary .JSON files
-    std::filesystem::remove(jsonFilePath);
-    std::filesystem::remove(newJsonPath);
-    logMessage("Temporary .JSON files deleted: " + jsonFilePath.string() + "\n" +
-               "                          and: " + newJsonPath.string() + "\n", logFile);
+    std::filesystem::remove(jsonImportPath);
+    std::filesystem::remove(jsonExportPath);
+    logMessage("Temporary .JSON files deleted: " + jsonImportPath.string() + "\n" +
+               "                          and: " + jsonExportPath.string() + "\n", logFile);
 
     // Close the database
     sqlite3_close(db);
