@@ -283,7 +283,7 @@ namespace std {
     };
 }
 
-// DContainer for tracking unique mismatch entries using unordered_set
+// Container for tracking unique mismatch entries using unordered_set
 std::unordered_set<MismatchEntry> mismatchedEntries;
 
 // Function to process replacements and mismatches
