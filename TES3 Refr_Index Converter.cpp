@@ -333,9 +333,8 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
                 continue;
             }
 
-            // Attempt direct replacement from database
+            // Handle replacements
             if (auto new_refrIndex = fetchRefIndex(db, query, refrIndexExtracted, idExtracted)) {
-                // Successful replacement
                 refr_index["refr_index"] = *new_refrIndex;
                 logMessage("Replaced JSON refr_index " + std::to_string(refrIndexExtracted) +
                            " with DB refr_index " + std::to_string(*new_refrIndex) +
@@ -343,7 +342,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
                 replacementsFlag = 1;
             }
 
-            // Handle mismatches for valid master indices
+            // Handle mismatches
             else {
                 const int refrIndexDB = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
                 const std::string idDB = fetchValue<FETCH_DB_ID>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
