@@ -327,7 +327,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
             std::string idExtracted = refr_index["id"];
             int mastIndexExtracted = refr_index.value("mast_index", -1);
 
-            // Valid master indices check
+            // Valid Parent Master files check
             if (!validMastersIN.count(mastIndexExtracted)) {
                 //logMessage("Skipping object (invalid master index): " + idExtracted, logFile);
                 continue;
