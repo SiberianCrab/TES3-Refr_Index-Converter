@@ -115,7 +115,7 @@ std::filesystem::path getInputFilePath(std::ofstream& logFile) {
             logMessage("Input file found: " + filePath.string(), logFile);
             break;
         }
-        logMessage("\nERROR - input file not found: check its directory, name and extension", logFile);
+        logMessage("\nERROR - input file not found: check its directory, name and extension!", logFile);
     }
     return filePath;
 }
@@ -127,7 +127,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
         });
 
     if (headerIter == inputData.end() || !headerIter->contains("masters")) {
-        logMessage("ERROR - missing 'header' section or 'masters' key", logFile);
+        logMessage("ERROR - missing 'header' section or 'masters' key!", logFile);
         return { false, {} };
     }
 
@@ -144,7 +144,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
     }
 
     if (!mwPos.has_value()) {
-        logMessage("ERROR - Morrowind.esm dependency not found", logFile);
+        logMessage("ERROR - Morrowind.esm dependency not found!", logFile);
         return { false, {} };
     }
 
@@ -259,10 +259,11 @@ auto fetchValue(sqlite3* db, int refrIndexJSON, int mastIndex, const std::unorde
         return refrIndexDB;
     }
 }
+
 // Mismatch entry structure to store reference data discrepancies
 struct MismatchEntry {
-    int refrIndexJSON;        // Reference index from JSON
-    std::string idJSON;       // Object ID from JSON
+    int refrIndexJSON;    // Reference index from JSON
+    std::string idJSON;   // Object ID from JSON
     std::string idDB;     // Expected ID from database
     int refrIndexDB;      // Expected reference index from database
 
@@ -274,10 +275,10 @@ struct MismatchEntry {
 //Hash function specialization for MismatchEntry
 namespace std {
     template<> struct hash<MismatchEntry> {
-        size_t operator()(const MismatchEntry& e) const noexcept {
-            return hash<int>{}(e.refrIndexJSON) ^
-                (hash<string>{}(e.idJSON) << 1) ^
-                (hash<string>{}(e.idJSON) >> (sizeof(size_t) * CHAR_BIT - 1));
+        size_t operator()(const MismatchEntry& e) const {
+            size_t h1 = hash<int>{}(e.refrIndexJSON);
+            size_t h2 = hash<string>{}(e.idJSON);
+            return h1 ^ (h2 << 1);
         }
     };
 }
@@ -326,31 +327,35 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
             std::string idExtracted = refr_index["id"];
             int mastIndexExtracted = refr_index.value("mast_index", -1);
 
+            // Valid master indices check
+            if (!validMastersIN.count(mastIndexExtracted)) {
+                //logMessage("Skipping object (invalid master index): " + idExtracted, logFile);
+                continue;
+            }
+
             // Attempt direct replacement from database
             if (auto new_refrIndex = fetchRefIndex(db, query, refrIndexExtracted, idExtracted)) {
                 // Successful replacement
                 refr_index["refr_index"] = *new_refrIndex;
                 logMessage("Replaced JSON refr_index " + std::to_string(refrIndexExtracted) +
                            " with DB refr_index " + std::to_string(*new_refrIndex) +
-                           " for JSON id: " + idExtracted, logFile);
+                           " for JSON id " + idExtracted, logFile);
                 replacementsFlag = 1;
             }
 
             // Handle mismatches for valid master indices
-            else if (validMastersIN.count(mastIndexExtracted)) {
-                // Get reference values from database
-                const int refrIndexDB = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(
-                    db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
-                const std::string idDB = fetchValue<FETCH_DB_ID>(
-                    db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+            else {
+                const int refrIndexDB = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+                const std::string idDB = fetchValue<FETCH_DB_ID>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
                 logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndexExtracted) +
-                           " and JSON id: " + idExtracted + " with DB refr_index: " + std::to_string(refrIndexDB) +
-                           " and DB id: " + idDB, logFile);
+                           " and JSON id " + idExtracted + " with DB refr_index " + std::to_string(refrIndexDB) +
+                           " and DB id " + idDB, logFile);
 
-                // Add to mismatch tracking (auto-deduplicated)
-                if (auto [it, inserted] = mismatchedEntries.emplace(
+                // Handle duplicated mismatches
+                if (auto [it, inserted] = mismatchedEntries.insert(
                     MismatchEntry{ refrIndexExtracted, idExtracted, idDB, refrIndexDB }); !inserted) {
-                    logMessage("Duplicate mismatch entry: " + std::to_string(refrIndexExtracted) + " - " + idExtracted, logFile);
+                    logMessage("WARNING - skipped duplicate mismatch entry for JSON refr_index " + std::to_string(refrIndexExtracted) +
+                               " and JSON id " + idExtracted, logFile);
                 }
             }
         }
@@ -371,8 +376,8 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
                         reference.value("id", "") == entry.idJSON) {
                         reference["refr_index"] = entry.refrIndexDB;
                         logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJSON) +
-                                   " with DB refr_index: " + std::to_string(entry.refrIndexDB) +
-                                   " for JSON id: " + entry.idJSON, logFile);
+                                   " with DB refr_index " + std::to_string(entry.refrIndexDB) +
+                                   " for JSON id " + entry.idJSON, logFile);
                         replacementsFlag = 1;
                     }
                 }
@@ -410,7 +415,8 @@ int main() {
     // Log file initialisation
     std::ofstream logFile("tes3_ri_log.txt", std::ios::app);
     if (!logFile) {
-        std::cerr << "ERROR - failed to open log file. Press Enter to exit...";
+        std::cerr << "ERROR - failed to open log file!\n\n"
+                     "Press Enter to exit...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::exit(EXIT_FAILURE);
     }
@@ -421,13 +427,13 @@ int main() {
 
     // Check if the database file exists
     if (!std::filesystem::exists("tes3_ri_en-ru_refr_index.db")) {
-        logErrorAndExit(nullptr, "ERROR - database file 'tes3_ri_en-ru_refr_index.db' not found\n", logFile);
+        logErrorAndExit(nullptr, "ERROR - database file 'tes3_ri_en-ru_refr_index.db' not found!\n", logFile);
     }
 
     // Open the database
     sqlite3* db = nullptr;
     if (sqlite3_open("tes3_ri_en-ru_refr_index.db", &db)) {
-        logErrorAndExit(db, "ERROR - failed to open database: " + std::string(sqlite3_errmsg(db)) + "\n", logFile);
+        logErrorAndExit(db, "ERROR - failed to open database: " + std::string(sqlite3_errmsg(db)) + "!\n", logFile);
     }
     logMessage("Database opened successfully...", logFile);
 
@@ -435,7 +441,7 @@ int main() {
     if (!std::filesystem::exists("tes3conv.exe")) {
         logErrorAndExit(db, "ERROR - tes3conv.exe not found! Please download the latest version from\n"
                             "github.com/Greatness7/tes3conv/releases and place it in the same directory\n"
-                            "with this program\n", logFile);
+                            "with this program.\n", logFile);
     }
     logMessage("tes3conv.exe found...\n"
                "Initialisation complete.", logFile);
@@ -452,7 +458,7 @@ int main() {
     // Convert the input file to .JSON
     std::string command = "tes3conv.exe \"" + pluginImportPath.string() + "\" \"" + jsonImportPath.string() + "\"";
     if (std::system(command.c_str()) != 0) {
-        logErrorAndExit(db, "ERROR - converting to .JSON failed\n", logFile);
+        logErrorAndExit(db, "ERROR - converting to .JSON failed!\n", logFile);
     }
     logMessage("Conversion to .JSON successful: " + jsonImportPath.string(), logFile);
 
@@ -467,7 +473,7 @@ int main() {
     if (!isValid) {
         std::filesystem::remove(jsonImportPath);
         logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
-        logErrorAndExit(db, "ERROR - required Parent Master files dependency not found, or theit order is invalid\n", logFile);
+        logErrorAndExit(db, "ERROR - required Parent Master files dependency not found, or theit order is invalid!\n", logFile);
     }
 
     // Initialize the replacements flag
@@ -480,7 +486,7 @@ int main() {
 
     // Process replacements
     if (processReplacementsAndMismatches(db, dbQuery, inputData, conversionChoice, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
-        logErrorAndExit(db, "ERROR - processing failed", logFile);
+        logErrorAndExit(db, "ERROR - processing failed!", logFile);
     }
 
     // Check if any replacements were made: if no replacements were found, cancel the conversion
@@ -498,7 +504,7 @@ int main() {
 
     std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
     if (!saveJsonToFile(jsonExportPath, inputData, logFile)) {
-        logErrorAndExit(db, "ERROR - failed to save modified data to .JSON file\n", logFile);
+        logErrorAndExit(db, "ERROR - failed to save modified data to .JSON file!\n", logFile);
     }
 
     // Convert the .JSON file back to .ESP|ESM
@@ -506,7 +512,7 @@ int main() {
 
     std::filesystem::path pluginExportPath = pluginImportPath.parent_path() / pluginExportName;
     if (!convertJsonToEsp(jsonExportPath, pluginExportPath, logFile)) {
-        logErrorAndExit(db, "ERROR - failed to convert .JSON back to .ESP|ESM\n", logFile);
+        logErrorAndExit(db, "ERROR - failed to convert .JSON back to .ESP|ESM!\n", logFile);
     }
 
     // Clean up temporary .JSON files
