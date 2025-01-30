@@ -52,7 +52,7 @@ void logErrorAndExit(sqlite3* db, const std::string& message, std::ofstream& log
 int getUserChoice(const std::string& prompt,
     const std::unordered_set<std::string>& validChoices,
     std::ofstream& logFile,
-    const std::string& errorMessage = "Invalid choice: enter ")
+    const std::string& errorMessage = "\nInvalid choice: enter ")
 {
     std::string input;
     while (true) {
@@ -100,7 +100,7 @@ int getUserMismatchChoice(std::ofstream& logFile) {
 std::filesystem::path getInputFilePath(std::ofstream& logFile) {
     std::filesystem::path filePath;
     while (true) {
-        std::cout << "\nEnter full path to your .ESP|ESM, or just filename (with extension), if your .ESP|ESM is in the same directory\n"
+        std::cout << "\nEnter full path to your .ESP|ESM or just filename (with extension), if your .ESP|ESM is in the same directory\n"
                      "with this program: ";
         std::string input;
         std::getline(std::cin, input);
