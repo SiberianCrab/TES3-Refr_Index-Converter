@@ -302,6 +302,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
 
     // Process each cell in the JSON array
     for (auto cell_it = inputData.begin(); cell_it != inputData.end(); ++cell_it) {
+
         // Skip non-cell entries or cells without proper type
         if (!cell_it->contains("type") || (*cell_it)["type"] != "Cell") continue;
 
