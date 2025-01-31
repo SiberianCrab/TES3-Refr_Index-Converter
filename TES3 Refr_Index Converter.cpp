@@ -1,22 +1,23 @@
-﻿#include <cctype>
-#include <filesystem>
-#include <cstdlib>
-#include <optional>
-#include <fstream>
+﻿#include <fstream>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
-#include <sqlite3.h>
+
+#include <cctype>
+#include <cstdlib>
+
 #include <json.hpp>
+#include <sqlite3.h>
 
 // Define an alias for ordered_json type from the nlohmann library
 using ordered_json = nlohmann::ordered_json;
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.2.1";
+const std::string PROGRAM_VERSION = "V 1.2.2";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
 
@@ -295,7 +296,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
 
     // Validate root JSON structure
     if (!inputData.is_array()) {
-        logMessage("\nInput JSON is not an array, unable to process", logFile);
+        logMessage("\nERROR - input JSON is not an array, unable to process!", logFile);
         return -1;
     }
 
@@ -393,7 +394,7 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
 bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_json& inputData, std::ofstream& logFile) {
     std::ofstream outputFile(jsonImportPath);
         if (!outputFile) return false;
-            outputFile << std::setw(2) << inputData;
+        outputFile << std::setw(2) << inputData;
             logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
     return true;
 }
