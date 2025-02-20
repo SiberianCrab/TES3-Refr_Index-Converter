@@ -500,7 +500,7 @@ int main() {
     // Define conversion prefix
     std::string convPrefix = (conversionChoice == 1) ? "RUtoEN" : "ENtoRU";
 
-    // Save the modified data to.JSON file
+    // Save the modified data to .JSON file
     auto newJsonName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), ".json");
 
     std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
