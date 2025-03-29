@@ -4,7 +4,11 @@
 #include <optional>
 #include <string>
 #include <unordered_set>
+#include <filesystem>
 #include <vector>
+#include <sstream>
+#include <format>
+#include <memory>
 
 #include <cctype>
 #include <cstdlib>
@@ -17,7 +21,7 @@ using ordered_json = nlohmann::ordered_json;
 
 // Define program metadata constants
 const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.2.2";
+const std::string PROGRAM_VERSION = "V 1.3.0";
 const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
 
@@ -49,6 +53,84 @@ void logErrorAndExit(sqlite3* db, const std::string& message, std::ofstream& log
     std::exit(EXIT_FAILURE);
 }
 
+// Function to check if file is a conversion output
+bool hasConversionPrefix(const std::filesystem::path& filePath) {
+    std::string filename = filePath.filename().string();
+    return filename.find("CONV_") == 0;
+}
+
+// Function to parse arguments
+struct ProgramOptions {
+    bool batchMode = false;
+    bool silentMode = false;
+    std::vector<std::filesystem::path> inputFiles;
+    int conversionType = 0;
+};
+
+ProgramOptions parseArguments(int argc, char* argv[]) {
+    ProgramOptions options;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::tolower);
+
+        if (arg == "--batch" || arg == "-b") {
+            options.batchMode = true;
+        }
+        else if (arg == "--silent" || arg == "-s") {
+            options.silentMode = true;
+        }
+        else if (arg == "--ru-to-en" || arg == "-1") {
+            options.conversionType = 1;
+        }
+        else if (arg == "--en-to-ru" || arg == "-2") {
+            options.conversionType = 2;
+        }
+        else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: " << argv[0] << " [options] [files-or-directories...]\n"
+                << "\nOPTIONS:\n"
+                << "  -b, --batch           Enable batch processing (auto-accept Mismatched entries replacements)\n"
+                << "  -s, --silent          Suppress non-critical messages\n"
+                << "  -1, --ru-to-en        Convert mods from Russian 1C to English GOTY\n"
+                << "  -2, --en-to-ru        Convert mods from English GOTY to Russian 1C\n"
+                << "  -h, --help            Show this help message\n"
+                << "\nFILES-OR-DIRECTORIES:\n"
+                << "  - Directory:          Processes all .esp/.esm in folder (e.g. \"C:\\Morrowind\\Data Files\\\")\n"
+                << "  - Single file:        Specific plugin (e.g. my_plugin.esp)\n"
+                << "  - Multiple files:     Space-separated list (e.g. file1.esp file2.esm)\n"
+                << "\nPATH FORMATS:\n"
+                << "  - Non-UTF-8 names\n"
+                << "  - Spaces in paths:    Must be quoted (e.g. \"C:\\My Mods\\file.esp\")\n"
+                << "  - Relative paths:     From program's directory (e.g. \"Program-Is-Here\\Mods\\plugin.esm\")\n"
+                << "  - Wildcards (*, ?):   Bash/Linux only (Windows: use batch scripts)\n"
+                << "\nEXAMPLES:\n"
+                << "  # Process entire game directory\n"
+                << "  " << argv[0] << " -b -1 \"C:\\Morrowind\\Data Files\\\"\n\n"
+                << "  # Convert single plugin (in program's directory)\n"
+                << "  " << argv[0] << " -2 my_plugin.esp\n\n"
+                << "  # Multiple specific files (in program's directory)\n"
+                << "  " << argv[0] << " -1 plugin1.esp plugin2.esm\n\n"
+                << "  # Silent mode with absolute path\n"
+                << "  " << argv[0] << " -s -2 \"C:\\Mods\\patch.esp\"\n";
+
+            std::cout << "\nPress Enter to exit...";
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            exit(0);
+        }
+        else {
+            std::filesystem::path path(arg);
+            if (std::filesystem::exists(path)) {
+                options.inputFiles.push_back(path);
+            }
+            else {
+                std::cerr << "Warning: Unknown argument or file not found - " << arg << "\n\n";
+            }
+        }
+    }
+
+    return options;
+}
+
 // Unified function for handling user choices
 int getUserChoice(const std::string& prompt,
     const std::unordered_set<std::string>& validChoices,
@@ -74,7 +156,7 @@ int getUserChoice(const std::string& prompt,
     }
 }
 
-// Function for handling conversion choises
+// Function for handling conversion choices
 int getUserConversionChoice(std::ofstream& logFile) {
     return getUserChoice(
         "\nConvert refr_index values in a plugin or master file:\n"
@@ -85,8 +167,13 @@ int getUserConversionChoice(std::ofstream& logFile) {
     );
 }
 
-// Function for handling mismatches
-int getUserMismatchChoice(std::ofstream& logFile) {
+// Function for handling mismatch choices
+int getUserMismatchChoice(std::ofstream& logFile, const ProgramOptions& options) {
+    if (options.batchMode) {
+        logMessage("\nBatch mode enabled - automatically replacing mismatched entries...", logFile);
+        return 1;
+    }
+
     return getUserChoice(
         "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
         "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
@@ -97,28 +184,116 @@ int getUserMismatchChoice(std::ofstream& logFile) {
     );
 }
 
-// Function for handling input file path from user
-std::filesystem::path getInputFilePath(std::ofstream& logFile) {
-    std::filesystem::path filePath;
-    while (true) {
-        std::cout << "\nEnter full path to your .ESP|ESM or just filename (with extension), if your .ESP|ESM is in the same directory\n"
-                     "with this program: ";
+// Function for handling input file path from user with recursive directory search
+std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& options, std::ofstream& logFile) {
+    if (!options.inputFiles.empty()) {
+        if (!options.silentMode) {
+            logMessage("Using files from command line arguments:", logFile);
+            for (const auto& file : options.inputFiles) {
+                logMessage("  " + file.string(), logFile);
+            }
+        }
+        return options.inputFiles;
+    }
+
+    // Interactive mode
+    if (options.batchMode) {
+        std::vector<std::filesystem::path> filePaths;
+
+        std::cout << "\nEnter full paths to your .ESP|ESM files (separated by semicolons) or directory path:\n> ";
         std::string input;
         std::getline(std::cin, input);
-        filePath = input;
 
-        // Convert the file extension to lowercase for case-insensitive comparison
-        std::string extension = filePath.extension().string();
-        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+        // Helper function to process a single path (file or directory)
+        auto processPath = [&](const std::filesystem::path& path) {
+            if (std::filesystem::is_directory(path)) {
+                // Recursive directory iterator for searching in subdirectories
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(path)) {
+                    if (entry.is_regular_file()) {
+                        std::string extension = entry.path().extension().string();
+                        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
-        if (std::filesystem::exists(filePath) &&
-            (extension == ".esp" || extension == ".esm")) {
-            logMessage("Input file found: " + filePath.string(), logFile);
-            break;
+                        // Skip CONV_ prefixed files and invalid extensions
+                        if ((extension == ".esp" || extension == ".esm") && !hasConversionPrefix(entry.path())) {
+                            filePaths.push_back(entry.path());
+                        }
+                    }
+                }
+            }
+            else if (std::filesystem::exists(path)) {
+                std::string extension = path.extension().string();
+                std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+                if ((extension == ".esp" || extension == ".esm") && !hasConversionPrefix(path)) {
+                    filePaths.push_back(path);
+                }
+                else if (!options.silentMode) {
+                    logMessage("\nWARNING - input file has invalid extension: " + path.string(), logFile);
+                }
+            }
+            else if (!options.silentMode) {
+                logMessage("\nWARNING - input path not found: " + path.string(), logFile);
+            }
+            };
+
+        // Directory input (single path)
+        if (input.find(';') == std::string::npos) {
+            processPath(input);
         }
-        logMessage("\nERROR - input file not found: check its directory, name and extension!", logFile);
+        else {
+            // File list input (multiple paths separated by semicolons)
+            std::istringstream iss(input);
+            std::string pathStr;
+            while (std::getline(iss, pathStr, ';')) {
+                std::filesystem::path path(pathStr);
+                processPath(path);
+            }
+        }
+
+        if (filePaths.empty()) {
+            logMessage("\nERROR - no valid input files found!", logFile);
+            return {};
+        }
+
+        if (!options.silentMode) {
+            logMessage("Input files found (" + std::to_string(filePaths.size()) + "):", logFile);
+            for (const auto& path : filePaths) {
+                logMessage("  " + path.string(), logFile);
+            }
+        }
+
+        return filePaths;
     }
-    return filePath;
+    else {
+        // Single file mode
+        std::vector<std::filesystem::path> result;
+        std::filesystem::path filePath;
+
+        while (true) {
+            std::cout << "\nEnter full path to your .ESP|ESM or just filename (with extension), if your .ESP|ESM is in the same directory\n"
+                "with this program: ";
+            std::string input;
+            std::getline(std::cin, input);
+            filePath = input;
+
+            std::string extension = filePath.extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+            if (std::filesystem::exists(filePath) && (extension == ".esp" || extension == ".esm")) {
+                if (!options.silentMode) {
+                    logMessage("Input file found: " + filePath.string(), logFile);
+                }
+                result.push_back(filePath);
+                break;
+            }
+
+            if (!options.silentMode) {
+                logMessage("\nERROR - input file not found: check its directory, name and extension!", logFile);
+            }
+        }
+
+        return result;
+    }
 }
 
 // Function to check the dependency order of Parent Master files in the input .ESP|ESM data
@@ -288,7 +463,7 @@ namespace std {
 std::unordered_set<MismatchEntry> mismatchedEntries;
 
 // Function to process replacements and mismatches
-int processReplacementsAndMismatches(sqlite3* db, const std::string& query, ordered_json& inputData,
+int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options, const std::string& query, ordered_json& inputData,
     int conversionChoice, int& replacementsFlag,
     const std::unordered_set<int>& validMastersDB,
     std::unordered_set<MismatchEntry>& mismatchedEntries,
@@ -309,10 +484,6 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
         // Extract references array from cell
         auto& references = (*cell_it)["references"];
         if (!references.is_array()) continue;
-
-        // Quick validation check before deep processing
-        const bool has_refs = !references.empty();
-        const bool needs_processing = has_refs && references[0].contains("refr_index") && references[0].contains("id");
 
         // Process individual references in cell
         for (auto ref_it = references.begin(); ref_it != references.end(); ++ref_it) {
@@ -347,7 +518,17 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
             // Handle mismatches
             else {
                 const int refrIndexDB = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+
+                // Skip if no matching record found in DB (refrIndexDB == -1)
+                if (refrIndexDB == -1) {
+                    //logMessage("Skipping object (no match in DB): JSON refr_index " + std::to_string(refrIndexExtracted) +
+                    //           " and JSON id " + idExtracted, logFile);
+                    continue;
+                }
+
                 const std::string idDB = fetchValue<FETCH_DB_ID>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+
+                // Only proceed with mismatch handling if we have valid DB data
                 logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndexExtracted) +
                            " and JSON id " + idExtracted + " with DB refr_index " + std::to_string(refrIndexDB) +
                            " and DB id " + idDB, logFile);
@@ -363,31 +544,37 @@ int processReplacementsAndMismatches(sqlite3* db, const std::string& query, orde
     }
 
     // Handle user choice for mismatched entries
-    int mismatchChoice = getUserMismatchChoice(logFile);
+    if (!mismatchedEntries.empty()) {
+        int mismatchChoice = getUserMismatchChoice(logFile, options);
 
-    if (mismatchChoice == 1) {
-        // Apply replacements for all tracked mismatches
-        for (const auto& entry : mismatchedEntries) {
-            for (auto& cell : inputData) {
-                if (!cell.contains("references") || !cell["references"].is_array()) continue;
+        if (mismatchChoice == 1) {
+            // Apply replacements for all tracked mismatches
+            for (const auto& entry : mismatchedEntries) {
+                for (auto& cell : inputData) {
+                    if (!cell.contains("references") || !cell["references"].is_array()) continue;
 
-                // Find and update matching references
-                for (auto& reference : cell["references"]) {
-                    if (reference["refr_index"] == entry.refrIndexJSON &&
-                        reference.value("id", "") == entry.idJSON) {
-                        reference["refr_index"] = entry.refrIndexDB;
-                        logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJSON) +
-                                   " with DB refr_index " + std::to_string(entry.refrIndexDB) +
-                                   " for JSON id " + entry.idJSON, logFile);
-                        replacementsFlag = 1;
+                    // Find and update matching references
+                    for (auto& reference : cell["references"]) {
+                        if (reference["refr_index"] == entry.refrIndexJSON &&
+                            reference.value("id", "") == entry.idJSON) {
+                            reference["refr_index"] = entry.refrIndexDB;
+                            logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJSON) +
+                                       " with DB refr_index " + std::to_string(entry.refrIndexDB) +
+                                       " for JSON id " + entry.idJSON, logFile);
+                            replacementsFlag = 1;
+                        }
                     }
                 }
             }
         }
+        else {
+            logMessage("\nMismatched entries will remain unchanged...", logFile);
+        }
     }
     else {
-        logMessage("\nMismatched entries will remain unchanged...", logFile);
+        logMessage("\nNo mismatched entries found - skipping mismatch handling", logFile);
     }
+
     return 0;
 }
 
@@ -409,22 +596,30 @@ bool convertJsonToEsp(const std::filesystem::path& jsonImportPath, const std::fi
 }
 
 // Main function
-int main() {
-    // Display program information
-    std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n" << PROGRAM_AUTHOR << "\n\n" << PROGRAM_TESTER << "\n\n";
+int main(int argc, char* argv[]) {
+    // Parse command line arguments
+    ProgramOptions options = parseArguments(argc, argv);
+
+    // Display program information (if not in silent mode)
+    if (!options.silentMode) {
+        std::cout << PROGRAM_NAME << "\n" << PROGRAM_VERSION << "\n"
+                  << PROGRAM_AUTHOR << "\n\n" << PROGRAM_TESTER << "\n\n";
+    }
 
     // Log file initialisation
     std::ofstream logFile("tes3_ri_log.txt", std::ios::app);
     if (!logFile) {
         std::cerr << "ERROR - failed to open log file!\n\n"
-                     "Press Enter to exit...";
+            << "Press Enter to exit...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        std::exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
     // Clear log file
     logClear();
-    logMessage("Log file cleared...", logFile);
+    if (!options.silentMode) {
+        logMessage("Log file cleared...", logFile);
+    }
 
     // Check if the database file exists
     if (!std::filesystem::exists("tes3_ri_en-ru_refr_index.db")) {
@@ -436,7 +631,10 @@ int main() {
     if (sqlite3_open("tes3_ri_en-ru_refr_index.db", &db)) {
         logErrorAndExit(db, "ERROR - failed to open database: " + std::string(sqlite3_errmsg(db)) + "!\n", logFile);
     }
-    logMessage("Database opened successfully...", logFile);
+
+    if (!options.silentMode) {
+        logMessage("Database opened successfully...", logFile);
+    }
 
     // Check if the converter executable exists
     if (!std::filesystem::exists("tes3conv.exe")) {
@@ -444,91 +642,132 @@ int main() {
                             "github.com/Greatness7/tes3conv/releases and place it in the same directory\n"
                             "with this program.\n", logFile);
     }
-    logMessage("tes3conv.exe found...\n"
-               "Initialisation complete.", logFile);
 
-    // Get the conversion choice from user
-    int conversionChoice = getUserConversionChoice(logFile);
-
-    // Get the input file path from user
-    std::filesystem::path pluginImportPath = getInputFilePath(logFile);
-
-    // Define the output file path
-    std::filesystem::path jsonImportPath = pluginImportPath.parent_path() / (pluginImportPath.stem().string() + ".json");
-
-    // Convert the input file to .JSON
-    std::string command = "tes3conv.exe \"" + pluginImportPath.string() + "\" \"" + jsonImportPath.string() + "\"";
-    if (std::system(command.c_str()) != 0) {
-        logErrorAndExit(db, "ERROR - converting to .JSON failed!\n", logFile);
-    }
-    logMessage("Conversion to .JSON successful: " + jsonImportPath.string(), logFile);
-
-    // Load the generated JSON file into a JSON object
-    std::ifstream inputFile(jsonImportPath);
-    ordered_json inputData;
-    inputFile >> inputData;
-    inputFile.close();
-
-    // Check the dependency order of the Parent Master files in the input data
-    auto [isValid, validMasters] = checkDependencyOrder(inputData, logFile);
-    if (!isValid) {
-        std::filesystem::remove(jsonImportPath);
-        logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
-        logErrorAndExit(db, "ERROR - required Parent Master files dependency not found, or theit order is invalid!\n", logFile);
+    if (!options.silentMode) {
+        logMessage("tes3conv.exe found...\n"
+                   "Initialisation complete.", logFile);
     }
 
-    // Initialize the replacements flag
-    int replacementsFlag = 0;
-
-    // Initialize the query based on user conversion choice
-    std::string dbQuery = (conversionChoice == 1)
-        ? "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;"
-        : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
-
-    // Process replacements
-    if (processReplacementsAndMismatches(db, dbQuery, inputData, conversionChoice, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
-        logErrorAndExit(db, "ERROR - processing failed!", logFile);
+    // Get the conversion choice
+    if (options.conversionType == 0) {
+        options.conversionType = getUserConversionChoice(logFile);
+    }
+    else if (!options.silentMode) {
+        logMessage("\nConversion type set from arguments: " + std::string(options.conversionType == 1 ? "RU to EN" : "EN to RU"), logFile);
     }
 
-    // Check if any replacements were made: if no replacements were found, cancel the conversion
-    if (replacementsFlag == 0) {
-        std::filesystem::remove(jsonImportPath);
-        logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
-        logErrorAndExit(db, "No replacements found: conversion canceled\n", logFile);
+    // Get the input file path(s)
+    auto inputPaths = getInputFilePaths(options, logFile);
+
+    // Sequential processing of each file
+    for (const auto& pluginImportPath : inputPaths) {
+        /// Clear data
+        validMastersIN.clear();
+        validMastersDB.clear();
+        mismatchedEntries.clear();
+
+        if (!options.silentMode) {
+            logMessage("\nProcessing file: " + pluginImportPath.string(), logFile);
+        }
+
+        try {
+            // Define the output file path
+            std::filesystem::path jsonImportPath = pluginImportPath.parent_path() / (pluginImportPath.stem().string() + ".json");
+
+            // Convert the input file to .JSON
+            std::string command = "tes3conv.exe \"" + pluginImportPath.string() + "\" \"" + jsonImportPath.string() + "\"";
+            if (std::system(command.c_str()) != 0) {
+                logMessage("ERROR - converting to .JSON failed for file: " + pluginImportPath.string(), logFile);
+                continue;
+            }
+            logMessage("Conversion to .JSON successful: " + jsonImportPath.string(), logFile);
+
+            // Load the generated JSON file
+            std::ifstream inputFile(jsonImportPath);
+            ordered_json inputData;
+            inputFile >> inputData;
+            inputFile.close();
+
+            // Check the dependency order
+            auto [isValid, validMasters] = checkDependencyOrder(inputData, logFile);
+            if (!isValid) {
+                std::filesystem::remove(jsonImportPath);
+                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                logMessage("ERROR - required Parent Master files dependency not found, or their order is invalid for file: " + pluginImportPath.string(), logFile);
+                continue;
+            }
+
+            // Initialize the replacements flag
+            int replacementsFlag = 0;
+
+            // Initialize the query based on conversion choice
+            std::string dbQuery = (options.conversionType == 1)
+                ? "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;"
+                : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
+
+            // Process replacements
+            if (processReplacementsAndMismatches(db, options, dbQuery, inputData, options.conversionType, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
+                logMessage("ERROR - processing failed for file: " + pluginImportPath.string(), logFile);
+                continue;
+            }
+
+            // Check if any replacements were made
+            if (replacementsFlag == 0) {
+                std::filesystem::remove(jsonImportPath);
+                logMessage("No replacements found for file: " + pluginImportPath.string() + " - conversion skipped\n", logFile);
+                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                continue;
+            }
+
+            // Define conversion prefix
+            std::string convPrefix = (options.conversionType == 1) ? "RUtoEN" : "ENtoRU";
+
+            // Save the modified data to .JSON file
+            auto newJsonName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), ".json");
+            std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
+
+            if (!saveJsonToFile(jsonExportPath, inputData, logFile)) {
+                logMessage("ERROR - failed to save modified data to .JSON file: " + jsonExportPath.string(), logFile);
+                continue;
+            }
+
+            // Convert the .JSON file back to .ESP|ESM
+            auto pluginExportName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), pluginImportPath.extension().string());
+            std::filesystem::path pluginExportPath = pluginImportPath.parent_path() / pluginExportName;
+
+            if (!convertJsonToEsp(jsonExportPath, pluginExportPath, logFile)) {
+                logMessage("ERROR - failed to convert .JSON back to .ESP|ESM: " + pluginExportPath.string(), logFile);
+                continue;
+            }
+
+            // Clean up temporary .JSON files
+            std::filesystem::remove(jsonImportPath);
+            std::filesystem::remove(jsonExportPath);
+            logMessage("Temporary .JSON files deleted: " + jsonImportPath.string() + "\n" +
+                       "                          and: " + jsonExportPath.string() + "\n", logFile);
+
+
+        }
+        catch (const std::exception& e) {
+            logMessage("ERROR processing " + pluginImportPath.string() + ": " + e.what(), logFile);
+            // Clear data in case of error
+            validMastersIN.clear();
+            validMastersDB.clear();
+            mismatchedEntries.clear();
+            continue;
+        }
     }
-
-    // Define conversion prefix
-    std::string convPrefix = (conversionChoice == 1) ? "RUtoEN" : "ENtoRU";
-
-    // Save the modified data to .JSON file
-    auto newJsonName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), ".json");
-
-    std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
-    if (!saveJsonToFile(jsonExportPath, inputData, logFile)) {
-        logErrorAndExit(db, "ERROR - failed to save modified data to .JSON file!\n", logFile);
-    }
-
-    // Convert the .JSON file back to .ESP|ESM
-    auto pluginExportName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), pluginImportPath.extension().string());
-
-    std::filesystem::path pluginExportPath = pluginImportPath.parent_path() / pluginExportName;
-    if (!convertJsonToEsp(jsonExportPath, pluginExportPath, logFile)) {
-        logErrorAndExit(db, "ERROR - failed to convert .JSON back to .ESP|ESM!\n", logFile);
-    }
-
-    // Clean up temporary .JSON files
-    std::filesystem::remove(jsonImportPath);
-    std::filesystem::remove(jsonExportPath);
-    logMessage("Temporary .JSON files deleted: " + jsonImportPath.string() + "\n" +
-               "                          and: " + jsonExportPath.string() + "\n", logFile);
 
     // Close the database
     sqlite3_close(db);
-    logMessage("The ending of the words is ALMSIVI\n", logFile);
-    logFile.close();
+    if (!options.silentMode) {
+        logMessage("\nThe ending of the words is ALMSIVI", logFile);
+        logFile.close();
 
-    // Wait for user input before exiting
-    std::cout << "Press Enter to continue...";
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    return 0;
+        // Wait for user input before exiting
+        std::cout << "\nPress Enter to continue...";
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
+
+    return EXIT_SUCCESS;
 }
