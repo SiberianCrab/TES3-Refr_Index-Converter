@@ -23,7 +23,6 @@ Target Formats:
 
 Path Handling Rules:
   - Always quote paths with spaces
-  - Use double backslashes (\) or forward slashes (/)
   - Relative paths start from program's directory
 
 Wildcards Support:

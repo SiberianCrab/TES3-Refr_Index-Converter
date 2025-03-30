@@ -109,7 +109,6 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
                       << "    file1.esp file2.esm \"file 3.esp\"\n\n"
                       << "Path Handling Rules:\n"
                       << "  - Always quote paths with spaces\n"
-                      << "  - Use double backslashes (\\) or forward slashes (/)\n"
                       << "  - Relative paths start from program's directory\n\n"
                       << "Wildcards Support:\n"
                       << "  - CMD: Only current folder (*.esp)\n"
