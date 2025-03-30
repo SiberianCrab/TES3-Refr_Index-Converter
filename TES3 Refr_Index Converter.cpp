@@ -713,7 +713,7 @@ int main(int argc, char* argv[]) {
         // Time file start
         auto fileStart = std::chrono::high_resolution_clock::now();
 
-        /// Clear data
+        // Clear data
         validMastersIN.clear();
         validMastersDB.clear();
         mismatchedEntries.clear();
