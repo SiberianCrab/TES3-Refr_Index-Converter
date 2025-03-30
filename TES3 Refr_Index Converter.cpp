@@ -114,19 +114,19 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
                       << "Wildcards Support:\n"
                       << "  - CMD: Only current folder (*.esp)\n"
                       << "  - PowerShell (recommended for recursive):\n"
-                      << "    & .\\\"TES3_Converter.exe\" -1 (Get-ChildItem -Recurse -Filter \"*.esp\").FullName\n\n"
+                      << "    & .\\\"TES3 Refr_Index Converter.exe\" -1 (Get-ChildItem -Recurse -Filter \"*.esp\").FullName\n\n"
                       << "Shell Specifics:\n"
                       << "  - CMD:\n"
-                      << "    .\\\"TES3_Converter.exe\" -1 \"C:\\Mods\\file.esp\"\n\n"
+                      << "    .\\\"TES3 Refr_Index Converter.exe\" -1 \"C:\\Mods\\file.esp\"\n\n"
                       << "  - PowerShell:\n"
-                      << "    & .\\\"TES3_Converter.exe\" -1 \"D:\\Modding\\my mod.esp\"\n\n"
+                      << "    & .\\\"TES3 Refr_Index Converter.exe\" -1 \"D:\\Modding\\my mod.esp\"\n\n"
                       << "Example Commands:\n"
                       << "  - Convert entire folder:\n"
-                      << "    .\\\"TES3_Converter.exe\" -b -1 \"C:\\Morrowind\\Data Files\\\"\n\n"
+                      << "    .\\\"TES3 Refr_Index Converter.exe\" -b -1 \"C:\\Morrowind\\Data Files\\\"\n\n"
                       << "  - Convert multiple specific files:\n"
-                      << "    .\\\"TES3_Converter.exe\" -2 \"C:\\Mods\\My Mod RU.esp\" My_Mod.esm\n\n"
+                      << "    .\\\"TES3 Refr_Index Converter.exe\" -2 \"C:\\Mods\\My Mod RU.esp\" My_Mod.esm\n\n"
                       << "  - Silent mode with PowerShell:\n"
-                      << "    & .\\\"TES3_Converter.exe\" -s -1 (Get-ChildItem -Recurse -Filter \"*_RU.esp\").FullName\n\n";
+                      << "    & .\\\"TES3 Refr_Index Converter.exe\" -s -1 (Get-ChildItem -Recurse -Filter \"*_RU.esp\").FullName\n\n";
 
             std::cout << "\nPress Enter to exit...";
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');

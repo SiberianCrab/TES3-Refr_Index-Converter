@@ -29,21 +29,21 @@ Path Handling Rules:
 Wildcards Support:
   - CMD: Only current folder (*.esp)
   - PowerShell (recommended for recursive):
-    & .\"TES3_Converter.exe" -1 (Get-ChildItem -Recurse -Filter "*.esp").FullName
+    & .\"TES3 Refr_Index Converter.exe" -1 (Get-ChildItem -Recurse -Filter "*.esp").FullName
 
 Shell Specifics:
   - CMD:
-    .\"TES3_Converter.exe" -1 "C:\Mods\file.esp"
+    .\"TES3 Refr_Index Converter.exe" -1 "C:\Mods\file.esp"
 
   - PowerShell:
-    & .\"TES3_Converter.exe" -1 "D:\Modding\my mod.esp"
+    & .\"TES3 Refr_Index Converter.exe" -1 "D:\Modding\my mod.esp"
 
 Example Commands:
   - Convert entire folder:
-    .\"TES3_Converter.exe" -b -1 "C:\Morrowind\Data Files\"
+    .\"TES3 Refr_Index Converter.exe" -b -1 "C:\Morrowind\Data Files\"
 
   - Convert multiple specific files:
-    .\"TES3_Converter.exe" -2 "C:\Mods\My Mod RU.esp" My_Mod.esm
+    .\"TES3 Refr_Index Converter.exe" -2 "C:\Mods\My Mod RU.esp" My_Mod.esm
 
   - Silent mode with PowerShell:
-    & .\"TES3_Converter.exe" -s -1 (Get-ChildItem -Recurse -Filter "*_RU.esp").FullName
+    & .\"TES3 Refr_Index Converter.exe" -s -1 (Get-ChildItem -Recurse -Filter "*_RU.esp").FullName
