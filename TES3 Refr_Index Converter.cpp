@@ -31,7 +31,7 @@ std::unordered_set<int> validMastersDB;
 
 // Function to clear log file
 void logClear() {
-    std::ofstream file("tes3_ri_log.txt", std::ios::trunc);
+    std::ofstream file("tes3_ri.log", std::ios::trunc);
 }
 
 // Function to log messages to both a log file and console
@@ -56,7 +56,8 @@ void logErrorAndExit(sqlite3* db, const std::string& message, std::ofstream& log
 // Function to check if file is a conversion output
 bool hasConversionPrefix(const std::filesystem::path& filePath) {
     std::string filename = filePath.filename().string();
-    return filename.find("CONV_") == 0;
+    return filename.find("CONV_RUtoEN_") == 0 ||
+           filename.find("CONV_ENtoRU_") == 0;
 }
 
 // Function to parse arguments
@@ -87,31 +88,44 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
             options.conversionType = 2;
         }
         else if (arg == "--help" || arg == "-h") {
-            std::cout << "Usage: " << argv[0] << " [options] [files-or-directories...]\n"
-                << "\nOPTIONS:\n"
-                << "  -b, --batch           Enable batch processing (auto-accept Mismatched entries replacements)\n"
-                << "  -s, --silent          Suppress non-critical messages\n"
-                << "  -1, --ru-to-en        Convert mods from Russian 1C to English GOTY\n"
-                << "  -2, --en-to-ru        Convert mods from English GOTY to Russian 1C\n"
-                << "  -h, --help            Show this help message\n"
-                << "\nFILES-OR-DIRECTORIES:\n"
-                << "  - Directory:          Processes all .esp/.esm in folder (e.g. \"C:\\Morrowind\\Data Files\\\")\n"
-                << "  - Single file:        Specific plugin (e.g. my_plugin.esp)\n"
-                << "  - Multiple files:     Space-separated list (e.g. file1.esp file2.esm)\n"
-                << "\nPATH FORMATS:\n"
-                << "  - Non-UTF-8 names\n"
-                << "  - Spaces in paths:    Must be quoted (e.g. \"C:\\My Mods\\file.esp\")\n"
-                << "  - Relative paths:     From program's directory (e.g. \"Program-Is-Here\\Mods\\plugin.esm\")\n"
-                << "  - Wildcards (*, ?):   Bash/Linux only (Windows: use batch scripts)\n"
-                << "\nEXAMPLES:\n"
-                << "  # Process entire game directory\n"
-                << "  " << argv[0] << " -b -1 \"C:\\Morrowind\\Data Files\\\"\n\n"
-                << "  # Convert single plugin (in program's directory)\n"
-                << "  " << argv[0] << " -2 my_plugin.esp\n\n"
-                << "  # Multiple specific files (in program's directory)\n"
-                << "  " << argv[0] << " -1 plugin1.esp plugin2.esm\n\n"
-                << "  # Silent mode with absolute path\n"
-                << "  " << argv[0] << " -s -2 \"C:\\Mods\\patch.esp\"\n";
+            std::cout << "TES3 Refr_Index Converter - Help\n"
+                      << "================================\n\n"
+                      << "Usage:\n"
+                      << "  .\\\"TES3 Refr_Index Converter.exe\" [OPTIONS] [TARGETS]\n\n"
+                      << "Options:\n"
+                      << "  -b, --batch      Enable batch mode (auto-accept all changes)\n"
+                      << "  -s, --silent     Suppress non-critical messages\n"
+                      << "  -1, --ru-to-en   Convert Russian 1C -> English GOTY\n"
+                      << "  -2, --en-to-ru   Convert English GOTY -> Russian 1C\n"
+                      << "  -h, --help       Show this help message\n\n"
+                      << "Target Formats:\n"
+                      << "  - Directory (recursive processing):\n"
+                      << "    \"C:\\Morrowind\\Data Files\\\"\n"
+                      << "    .\\Data\\  (relative path)\n\n"
+                      << "  - Single/Multiple Files:\n"
+                      << "    file.esp\n"
+                      << "    \"file with spaces.esm\"\n"
+                      << "    file1.esp file2.esm \"file 3.esp\"\n\n"
+                      << "Path Handling Rules:\n"
+                      << "  - Always quote paths with spaces\n"
+                      << "  - Use double backslashes (\\) or forward slashes (/)\n"
+                      << "  - Relative paths start from program's directory\n\n"
+                      << "Wildcards Support:\n"
+                      << "  - CMD: Only current folder (*.esp)\n"
+                      << "  - PowerShell (recommended for recursive):\n"
+                      << "    & .\\\"TES3_Converter.exe\" -1 (Get-ChildItem -Recurse -Filter \"*.esp\").FullName\n\n"
+                      << "Shell Specifics:\n"
+                      << "  - CMD:\n"
+                      << "    .\\\"TES3_Converter.exe\" -1 \"C:\\Mods\\file.esp\"\n\n"
+                      << "  - PowerShell:\n"
+                      << "    & .\\\"TES3_Converter.exe\" -1 \"D:\\Modding\\my mod.esp\"\n\n"
+                      << "Example Commands:\n"
+                      << "  - Convert entire folder:\n"
+                      << "    .\\\"TES3_Converter.exe\" -b -1 \"C:\\Morrowind\\Data Files\\\"\n\n"
+                      << "  - Convert multiple specific files:\n"
+                      << "    .\\\"TES3_Converter.exe\" -2 \"C:\\Mods\\My Mod RU.esp\" My_Mod.esm\n\n"
+                      << "  - Silent mode with PowerShell:\n"
+                      << "    & .\\\"TES3_Converter.exe\" -s -1 (Get-ChildItem -Recurse -Filter \"*_RU.esp\").FullName\n\n";
 
             std::cout << "\nPress Enter to exit...";
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -187,82 +201,105 @@ int getUserMismatchChoice(std::ofstream& logFile, const ProgramOptions& options)
 // Function for handling input file path from user with recursive directory search
 std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& options, std::ofstream& logFile) {
     if (!options.inputFiles.empty()) {
-        if (!options.silentMode) {
-            logMessage("Using files from command line arguments:", logFile);
-            for (const auto& file : options.inputFiles) {
-                logMessage("  " + file.string(), logFile);
-            }
+        logMessage("Using files from command line arguments:", logFile);
+        for (const auto& file : options.inputFiles) {
+            logMessage("  " + file.string(), logFile);
         }
         return options.inputFiles;
     }
 
     // Interactive mode
     if (options.batchMode) {
-        std::vector<std::filesystem::path> filePaths;
+        while (true) {
+            std::vector<std::filesystem::path> filePaths;
 
-        std::cout << "\nEnter full paths to your .ESP|ESM files (separated by semicolons) or directory path:\n> ";
-        std::string input;
-        std::getline(std::cin, input);
+            std::cout << "\nEnter full paths to your .ESP|ESM or just filenames (with extension), if your files is in the same directory\n"
+                         "with this program (separated by spaces, paths and filenames with spaces must be quoted): \n> ";
+            std::string input;
+            std::getline(std::cin, input);
 
-        // Helper function to process a single path (file or directory)
-        auto processPath = [&](const std::filesystem::path& path) {
-            if (std::filesystem::is_directory(path)) {
-                // Recursive directory iterator for searching in subdirectories
-                for (const auto& entry : std::filesystem::recursive_directory_iterator(path)) {
-                    if (entry.is_regular_file()) {
-                        std::string extension = entry.path().extension().string();
-                        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+            // Helper function to parse quoted paths
+            auto parseQuotedPaths = [](const std::string& input) -> std::vector<std::string> {
+                std::vector<std::string> paths;
+                bool inQuotes = false;
+                std::string currentPath;
 
-                        // Skip CONV_ prefixed files and invalid extensions
-                        if ((extension == ".esp" || extension == ".esm") && !hasConversionPrefix(entry.path())) {
-                            filePaths.push_back(entry.path());
+                for (char c : input) {
+                    if (c == '\"') {
+                        inQuotes = !inQuotes;
+                        if (!inQuotes && !currentPath.empty()) {
+                            paths.push_back(currentPath);
+                            currentPath.clear();
+                        }
+                    }
+                    else if (c == ' ' && !inQuotes) {
+                        if (!currentPath.empty()) {
+                            paths.push_back(currentPath);
+                            currentPath.clear();
+                        }
+                    }
+                    else {
+                        currentPath += c;
+                    }
+                }
+
+                if (!currentPath.empty()) {
+                    paths.push_back(currentPath);
+                }
+
+                return paths;
+                };
+
+            // Parse input paths
+            std::vector<std::string> pathStrings = parseQuotedPaths(input);
+
+            // Process each path
+            for (const auto& pathStr : pathStrings) {
+                if (pathStr.empty()) continue;
+
+                std::filesystem::path path(pathStr);
+
+                // Check if path is a directory or file
+                if (std::filesystem::is_directory(path)) {
+                    // Recursive directory iterator for searching in subdirectories
+                    for (const auto& entry : std::filesystem::recursive_directory_iterator(path)) {
+                        if (entry.is_regular_file()) {
+                            std::string extension = entry.path().extension().string();
+                            std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+                            // Skip CONV_ prefixed files and invalid extensions
+                            if ((extension == ".esp" || extension == ".esm") && !hasConversionPrefix(entry.path())) {
+                                filePaths.push_back(entry.path());
+                            }
                         }
                     }
                 }
-            }
-            else if (std::filesystem::exists(path)) {
-                std::string extension = path.extension().string();
-                std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+                else if (std::filesystem::exists(path)) {
+                    std::string extension = path.extension().string();
+                    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
-                if ((extension == ".esp" || extension == ".esm") && !hasConversionPrefix(path)) {
-                    filePaths.push_back(path);
+                    if ((extension == ".esp" || extension == ".esm") && !hasConversionPrefix(path)) {
+                        filePaths.push_back(path);
+                    }
+                    else if (!options.silentMode) {
+                        logMessage("\nWARNING - input file has invalid extension: " + path.string(), logFile);
+                    }
                 }
                 else if (!options.silentMode) {
-                    logMessage("\nWARNING - input file has invalid extension: " + path.string(), logFile);
+                    logMessage("\nWARNING - input path not found: " + path.string(), logFile);
                 }
             }
-            else if (!options.silentMode) {
-                logMessage("\nWARNING - input path not found: " + path.string(), logFile);
+
+            if (!filePaths.empty()) {
+                logMessage("Input files found (" + std::to_string(filePaths.size()) + "):", logFile);
+                for (const auto& path : filePaths) {
+                    logMessage("  " + path.string(), logFile);
+                }
+                return filePaths;
             }
-            };
 
-        // Directory input (single path)
-        if (input.find(';') == std::string::npos) {
-            processPath(input);
+            logMessage("\nERROR - input files not found: check their directory, names and extensions!", logFile);
         }
-        else {
-            // File list input (multiple paths separated by semicolons)
-            std::istringstream iss(input);
-            std::string pathStr;
-            while (std::getline(iss, pathStr, ';')) {
-                std::filesystem::path path(pathStr);
-                processPath(path);
-            }
-        }
-
-        if (filePaths.empty()) {
-            logMessage("\nERROR - no valid input files found!", logFile);
-            return {};
-        }
-
-        if (!options.silentMode) {
-            logMessage("Input files found (" + std::to_string(filePaths.size()) + "):", logFile);
-            for (const auto& path : filePaths) {
-                logMessage("  " + path.string(), logFile);
-            }
-        }
-
-        return filePaths;
     }
     else {
         // Single file mode
@@ -270,7 +307,7 @@ std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& optio
         std::filesystem::path filePath;
 
         while (true) {
-            std::cout << "\nEnter full path to your .ESP|ESM or just filename (with extension), if your .ESP|ESM is in the same directory\n"
+            std::cout << "\nEnter full path to your .ESP|ESM or just filename (with extension), if your files is in the same directory\n"
                 "with this program: ";
             std::string input;
             std::getline(std::cin, input);
@@ -509,9 +546,11 @@ int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options,
             // Handle replacements
             if (auto new_refrIndex = fetchRefIndex(db, query, refrIndexExtracted, idExtracted)) {
                 refr_index["refr_index"] = *new_refrIndex;
-                logMessage("Replaced JSON refr_index " + std::to_string(refrIndexExtracted) +
-                           " with DB refr_index " + std::to_string(*new_refrIndex) +
-                           " for JSON id " + idExtracted, logFile);
+                if (!options.silentMode) {
+                    logMessage("Replaced JSON refr_index " + std::to_string(refrIndexExtracted) +
+                               " with DB refr_index " + std::to_string(*new_refrIndex) +
+                               " for JSON id " + idExtracted, logFile);
+                }
                 replacementsFlag = 1;
             }
 
@@ -521,17 +560,21 @@ int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options,
 
                 // Skip if no matching record found in DB (refrIndexDB == -1)
                 if (refrIndexDB == -1) {
-                    //logMessage("Skipping object (no match in DB): JSON refr_index " + std::to_string(refrIndexExtracted) +
-                    //           " and JSON id " + idExtracted, logFile);
+                    //if (!options.silentMode) {
+                        //logMessage("Skipping object (no match in DB): JSON refr_index " + std::to_string(refrIndexExtracted) +
+                        //           " and JSON id " + idExtracted, logFile);
+                    //}
                     continue;
                 }
 
                 const std::string idDB = fetchValue<FETCH_DB_ID>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
 
                 // Only proceed with mismatch handling if we have valid DB data
-                logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndexExtracted) +
-                           " and JSON id " + idExtracted + " with DB refr_index " + std::to_string(refrIndexDB) +
-                           " and DB id " + idDB, logFile);
+                if (!options.silentMode) {
+                    logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndexExtracted) +
+                               " and JSON id " + idExtracted + " with DB refr_index " + std::to_string(refrIndexDB) +
+                               " and DB id " + idDB, logFile);
+                }
 
                 // Handle duplicated mismatches
                 if (auto [it, inserted] = mismatchedEntries.insert(
@@ -558,9 +601,11 @@ int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options,
                         if (reference["refr_index"] == entry.refrIndexJSON &&
                             reference.value("id", "") == entry.idJSON) {
                             reference["refr_index"] = entry.refrIndexDB;
-                            logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJSON) +
-                                       " with DB refr_index " + std::to_string(entry.refrIndexDB) +
-                                       " for JSON id " + entry.idJSON, logFile);
+                            if (!options.silentMode) {
+                                logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJSON) +
+                                           " with DB refr_index " + std::to_string(entry.refrIndexDB) +
+                                           " for JSON id " + entry.idJSON, logFile);
+                            }
                             replacementsFlag = 1;
                         }
                     }
@@ -607,10 +652,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Log file initialisation
-    std::ofstream logFile("tes3_ri_log.txt", std::ios::app);
+    std::ofstream logFile("tes3_ri.log", std::ios::app);
     if (!logFile) {
         std::cerr << "ERROR - failed to open log file!\n\n"
-            << "Press Enter to exit...";
+                  << "Press Enter to exit...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         return EXIT_FAILURE;
     }
@@ -666,9 +711,7 @@ int main(int argc, char* argv[]) {
         validMastersDB.clear();
         mismatchedEntries.clear();
 
-        if (!options.silentMode) {
-            logMessage("\nProcessing file: " + pluginImportPath.string(), logFile);
-        }
+        logMessage("\nProcessing file: " + pluginImportPath.string(), logFile);
 
         try {
             // Define the output file path
