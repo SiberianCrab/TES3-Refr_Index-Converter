@@ -9,6 +9,7 @@
 #include <sstream>
 #include <format>
 #include <memory>
+#include <chrono>
 
 #include <cctype>
 #include <cstdlib>
@@ -415,9 +416,9 @@ enum FetchMode {
     FETCH_OPPOSITE_REFR_INDEX
 };
 
-// Template function to fetch values from the database based on the fetch mode
+// Template function to fetch ID from the database based on the fetch mode
 template <FetchMode mode>
-auto fetchValue(sqlite3* db, int refrIndexJSON, int mastIndex, const std::unordered_set<int>& validMastersDB, int conversionChoice) {
+auto fetchID(sqlite3* db, int refrIndexJSON, int mastIndex, const std::unordered_set<int>& validMastersDB, int conversionChoice) {
     std::string query;
 
     // Determine the query based on the conversion choice and fetch mode
@@ -556,7 +557,7 @@ int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options,
 
             // Handle mismatches
             else {
-                const int refrIndexDB = fetchValue<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+                const int refrIndexDB = fetchID<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
 
                 // Skip if no matching record found in DB (refrIndexDB == -1)
                 if (refrIndexDB == -1) {
@@ -567,7 +568,7 @@ int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options,
                     continue;
                 }
 
-                const std::string idDB = fetchValue<FETCH_DB_ID>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+                const std::string idDB = fetchID<FETCH_DB_ID>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
 
                 // Only proceed with mismatch handling if we have valid DB data
                 if (!options.silentMode) {
@@ -704,8 +705,14 @@ int main(int argc, char* argv[]) {
     // Get the input file path(s)
     auto inputPaths = getInputFilePaths(options, logFile);
 
+    // Time start
+    auto programStart = std::chrono::high_resolution_clock::now();
+
     // Sequential processing of each file
     for (const auto& pluginImportPath : inputPaths) {
+        // Time file start
+        auto fileStart = std::chrono::high_resolution_clock::now();
+
         /// Clear data
         validMastersIN.clear();
         validMastersDB.clear();
@@ -748,7 +755,7 @@ int main(int argc, char* argv[]) {
                 ? "SELECT refr_index_EN FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_RU = ? AND id = ?;"
                 : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
-            // Process replacements
+            // Process replacements and mismatches
             if (processReplacementsAndMismatches(db, options, dbQuery, inputData, options.conversionType, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
                 logMessage("ERROR - processing failed for file: " + pluginImportPath.string(), logFile);
                 continue;
@@ -789,9 +796,16 @@ int main(int argc, char* argv[]) {
             logMessage("Temporary .JSON files deleted: " + jsonImportPath.string() + "\n" +
                        "                          and: " + jsonExportPath.string() + "\n", logFile);
 
-
+            // Time file total
+            auto fileEnd = std::chrono::high_resolution_clock::now();
+            auto fileDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileEnd - fileStart);
+            logMessage("File processed in " + std::to_string(fileDuration.count() / 1000.0) + " seconds", logFile);
         }
         catch (const std::exception& e) {
+            // Time error
+            auto fileEnd = std::chrono::high_resolution_clock::now();
+            auto fileDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileEnd - fileStart);
+
             logMessage("ERROR processing " + pluginImportPath.string() + ": " + e.what(), logFile);
             // Clear data in case of error
             validMastersIN.clear();
@@ -800,6 +814,12 @@ int main(int argc, char* argv[]) {
             continue;
         }
     }
+
+    // Time total
+    auto programEnd = std::chrono::high_resolution_clock::now();
+    auto programDuration = std::chrono::duration_cast<std::chrono::milliseconds>(programEnd - programStart);
+
+    logMessage("\nTotal processing time: " + std::to_string(programDuration.count() / 1000.0) + " seconds", logFile);
 
     // Close the database
     sqlite3_close(db);
