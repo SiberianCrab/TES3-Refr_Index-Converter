@@ -48,6 +48,9 @@
     <CopyFileToFolders Include="Libraries\sqlite3.dll">
       <Filter>Libraries</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="tes3_ri_help.txt">
+      <Filter>Resource Files</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Icon.ico">
