@@ -558,7 +558,7 @@ int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options,
             else {
                 const int refrIndexDB = fetchID<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
 
-                // Skip if no matching record found in DB (refrIndexDB == -1)
+                // Skip if no matching record found in DB
                 if (refrIndexDB == -1) {
                     //if (!options.silentMode) {
                         //logMessage("Skipping object (no match in DB): JSON refr_index " + std::to_string(refrIndexExtracted) +
