@@ -10,6 +10,7 @@
 #include <format>
 #include <memory>
 #include <chrono>
+#include <functional>
 
 #include <cctype>
 #include <cstdlib>
@@ -520,7 +521,7 @@ namespace std {
         size_t operator()(const MismatchEntry& e) const {
             size_t h1 = hash<int>{}(e.refrIndexJSON);
             size_t h2 = hash<string>{}(e.idJSON);
-            return h1 ^ (h2 << 1);
+            return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
         }
     };
 }
@@ -663,9 +664,16 @@ bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_j
 
 // Function to convert the .JSON file to .ESP|ESM
 bool convertJsonToEsp(const std::filesystem::path& jsonImportPath, const std::filesystem::path& espFilePath, std::ofstream& logFile) {
-    std::string command = "tes3conv.exe \"" + jsonImportPath.string() + "\" \"" + espFilePath.string() + "\"";
-        if (std::system(command.c_str()) != 0) return false;
-            logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string() + "\n", logFile);
+    std::ostringstream command;
+    command << "tes3conv.exe "
+        << std::quoted(jsonImportPath.string()) << " "
+        << std::quoted(espFilePath.string());
+
+    if (std::system(command.str().c_str()) != 0) {
+        return false;
+    }
+
+    logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string() + "\n", logFile);
     return true;
 }
 
@@ -686,6 +694,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "ERROR - failed to open log file!\n\n"
                   << "Press Enter to exit...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        logFile.close();
         return EXIT_FAILURE;
     }
 
@@ -761,9 +770,28 @@ int main(int argc, char* argv[]) {
             logMessage("Conversion to .JSON successful: " + jsonImportPath.string(), logFile);
 
             // Load the generated JSON file
-            std::ifstream inputFile(jsonImportPath);
+            std::ifstream inputFile(jsonImportPath, std::ios::binary);
+            if (!inputFile.is_open()) {
+                logMessage("ERROR - failed to open JSON file: " + jsonImportPath.string(), logFile);
+                continue;
+            }
+
+            inputFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+
             ordered_json inputData;
-            inputFile >> inputData;
+            try {
+                inputFile >> inputData;
+
+                if (inputData.is_discarded()) {
+                    logMessage("ERROR - parsed JSON is invalid or empty: " + jsonImportPath.string(), logFile);
+                    continue;
+                }
+            }
+            catch (const std::exception& e) {
+                logMessage("ERROR - failed to parse JSON (" + jsonImportPath.string() + "): " + e.what(), logFile);
+                continue;
+            }
+
             inputFile.close();
 
             // Check the dependency order
