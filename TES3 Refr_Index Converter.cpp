@@ -16,7 +16,7 @@
 #include <cstdlib>
 
 #include <json.hpp>
-#include <sqlite3.h>
+#include "database.h"
 
 // Define an alias for ordered_json type from the nlohmann library
 using ordered_json = nlohmann::ordered_json;
@@ -43,10 +43,9 @@ void logMessage(const std::string& message, std::ofstream& logFile) {
 }
 
 // Function to log errors, close the database and terminate the program
-void logErrorAndExit(sqlite3* db, const std::string& message, std::ofstream& logFile) {
+void logErrorAndExit(const std::string& message, std::ofstream& logFile) {
     logMessage(message, logFile);
 
-    if (db) sqlite3_close(db);
     logFile.close();
 
     std::cout << "Press Enter to exit...";
@@ -423,7 +422,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
 }
 
 // Function to fetch the refr_index from the database
-std::optional<int> fetchRefIndex(sqlite3* db, const std::string& query, int refrIndexJSON, const std::string& idJSON) {
+std::optional<int> fetchRefIndex(const Database& db, const std::string& query, int refrIndexJSON, const std::string& idJSON) {
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
         return std::nullopt;
@@ -447,7 +446,7 @@ enum FetchMode {
 
 // Template function to fetch ID from the database based on the fetch mode
 template <FetchMode mode>
-auto fetchID(sqlite3* db, int refrIndexJSON, int mastIndex, const std::unordered_set<int>& validMastersDB, int conversionChoice) {
+auto fetchID(const Database& db, int refrIndexJSON, int mastIndex, const std::unordered_set<int>& validMastersDB, int conversionChoice) {
     std::string query;
 
     // Determine the query based on the conversion choice and fetch mode
@@ -530,7 +529,7 @@ namespace std {
 std::unordered_set<MismatchEntry> mismatchedEntries;
 
 // Function to process replacements and mismatches
-int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options, const std::string& query, ordered_json& inputData,
+int processReplacementsAndMismatches(const Database& db, const ProgramOptions& options, const std::string& query, ordered_json& inputData,
     int conversionChoice, int& replacementsFlag,
     const std::unordered_set<int>& validMastersDB,
     std::unordered_set<MismatchEntry>& mismatchedEntries,
@@ -569,7 +568,9 @@ int processReplacementsAndMismatches(sqlite3* db, const ProgramOptions& options,
 
             // Valid Parent Master files check
             if (!validMastersIN.count(mastIndexExtracted)) {
-                //logMessage("Skipping object (invalid master index): " + idExtracted, logFile);
+                //if (!options.silentMode) {
+                    //logMessage("Skipping object (invalid master index): " + idExtracted, logFile);
+                //}
                 continue;
             }
 
@@ -706,24 +707,21 @@ int main(int argc, char* argv[]) {
 
     // Check if the database file exists
     if (!std::filesystem::exists("tes3_ri_en-ru_refr_index.db")) {
-        logErrorAndExit(nullptr, "ERROR - database file 'tes3_ri_en-ru_refr_index.db' not found!\n", logFile);
+        logErrorAndExit("ERROR - database file 'tes3_ri_en-ru_refr_index.db' not found!\n", logFile);
     }
 
-    // Open the database
-    sqlite3* db = nullptr;
-    if (sqlite3_open("tes3_ri_en-ru_refr_index.db", &db)) {
-        logErrorAndExit(db, "ERROR - failed to open database: " + std::string(sqlite3_errmsg(db)) + "!\n", logFile);
-    }
+    Database db("tes3_ri_en-ru_refr_index.db");
 
+    // Log successful connection if not in silent mode
     if (!options.silentMode) {
         logMessage("Database opened successfully...", logFile);
     }
 
     // Check if the converter executable exists
     if (!std::filesystem::exists("tes3conv.exe")) {
-        logErrorAndExit(db, "ERROR - tes3conv.exe not found! Please download the latest version from\n"
-                            "github.com/Greatness7/tes3conv/releases and place it in the same directory\n"
-                            "with this program.\n", logFile);
+        logErrorAndExit("ERROR - tes3conv.exe not found! Please download the latest version from\n"
+                        "github.com/Greatness7/tes3conv/releases and place it in the same directory\n"
+                        "with this program.\n", logFile);
     }
 
     if (!options.silentMode) {
@@ -863,6 +861,7 @@ int main(int argc, char* argv[]) {
             auto fileDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileEnd - fileStart);
 
             logMessage("ERROR processing " + pluginImportPath.string() + ": " + e.what(), logFile);
+
             // Clear data in case of error
             validMastersIN.clear();
             validMastersDB.clear();
@@ -878,7 +877,6 @@ int main(int argc, char* argv[]) {
     logMessage("\nTotal processing time: " + std::to_string(programDuration.count() / 1000.0) + " seconds", logFile);
 
     // Close the database
-    sqlite3_close(db);
     if (!options.silentMode) {
         logMessage("\nThe ending of the words is ALMSIVI", logFile);
         logFile.close();

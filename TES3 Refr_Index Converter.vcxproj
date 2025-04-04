@@ -138,12 +138,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="database.cpp" />
     <ClCompile Include="TES3 Refr_Index Converter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="TES3 Refr_Index Converter.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="database.h" />
     <ClInclude Include="Headers\sqlite3.h" />
     <ClInclude Include="Libraries\json.hpp" />
     <ClInclude Include="resource.h" />
