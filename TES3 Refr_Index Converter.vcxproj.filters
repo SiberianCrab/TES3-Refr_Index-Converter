@@ -16,8 +16,11 @@
     <Filter Include="DB">
       <UniqueIdentifier>{61d5f804-b659-45b1-a0af-8d771907f21a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Libraries">
+    <Filter Include="Help">
       <UniqueIdentifier>{78a8d99f-8ebe-4b6e-bbec-c99f1da239fd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Libraries">
+      <UniqueIdentifier>{6352b632-b4c2-4270-b75e-eaf184bb45e1}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -40,22 +43,22 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Headers\database.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Libraries\json.hpp">
       <Filter>Libraries</Filter>
-    </ClInclude>
-    <ClInclude Include="database.h">
-      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="DB\tes3_ri_en-ru_refr_index.db">
       <Filter>DB</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="Help\tes3_ri_help.txt">
+      <Filter>Help</Filter>
+    </CopyFileToFolders>
     <CopyFileToFolders Include="Libraries\sqlite3.dll">
       <Filter>Libraries</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="tes3_ri_help.txt">
-      <Filter>Resource Files</Filter>
     </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
