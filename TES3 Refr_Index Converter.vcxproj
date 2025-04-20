@@ -142,9 +142,6 @@
     <ClCompile Include="tes3_ri_converter.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="tes3_ri_converter.rc" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="Headers\database.h" />
     <ClInclude Include="Headers\json.hpp" />
     <ClInclude Include="Headers\sqlite3.h" />
@@ -167,6 +164,9 @@
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="Help\tes3_ri_help.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="tes3_ri_converter.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
