@@ -35,8 +35,8 @@ const std::string PROGRAM_AUTHOR = "by SiberianCrab";
 const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
 
 // Define sets to store valid master indices and masters from the database
-std::unordered_set<int> validMastersIN;
-std::unordered_set<int> validMastersDB;
+std::unordered_set<int> validMastersIn;
+std::unordered_set<int> validMastersDb;
 
 // Function to clear log file
 void logClear() {
@@ -59,13 +59,6 @@ void logErrorAndExit(const std::string& message, std::ofstream& logFile) {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
     std::exit(EXIT_FAILURE);
-}
-
-// Function to check if file is a conversion output
-bool hasConversionPrefix(const std::filesystem::path& filePath) {
-    std::string filename = filePath.filename().string();
-    return filename.find("CONV_RUtoEN_") == 0 ||
-           filename.find("CONV_ENtoRU_") == 0;
 }
 
 // Function to parse arguments
@@ -222,7 +215,7 @@ int getUserConversionChoice(std::ofstream& logFile) {
 // Function for handling mismatch choices
 int getUserMismatchChoice(std::ofstream& logFile, const ProgramOptions& options) {
     if (options.batchMode) {
-        logMessage("\nBatch mode enabled - automatically replacing mismatched entries...", logFile);
+        logMessage("\nBatch mode enabled - automatically replacing mismatched entries...\n", logFile);
         return 1;
     }
 
@@ -262,12 +255,12 @@ std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& optio
                 if (std::filesystem::is_directory(path)) {
                     logMessage("Processing directory: " + path.string(), logFile);
                     for (const auto& entry : std::filesystem::recursive_directory_iterator(path)) {
-                        if (entry.is_regular_file() && isValidModFile(entry.path()) && !hasConversionPrefix(entry.path())) {
+                        if (entry.is_regular_file() && isValidModFile(entry.path())) {
                             result.push_back(entry.path());
                         }
                     }
                 }
-                else if (isValidModFile(path) && !hasConversionPrefix(path)) {
+                else if (isValidModFile(path)) {
                     result.push_back(path);
                 }
                 else if (!options.silentMode) {
@@ -360,6 +353,26 @@ std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& optio
     }
 }
 
+// Function to check if file is a conversion output
+bool hasConversionTag(const ordered_json& inputData, const std::filesystem::path& filePath, std::ofstream& logFile) {
+    // Find the header section in the JSON data
+    auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const ordered_json& item) {
+        return item.contains("type") && item["type"] == "Header";
+        });
+
+    // Check if header contains a description field
+    if (headerIter != inputData.end() && headerIter->contains("description")) {
+        std::string description = (*headerIter)["description"];
+        // Check conversion markers in the description
+        if (description.find("Converted (Ru->En) by TES3 Ref_Ind Converter") != std::string::npos ||
+            description.find("Converted (En->Ru) by TES3 Ref_Ind Converter") != std::string::npos) {
+
+            return true;
+        }
+    }
+    return false;
+}
+
 // Function to check the dependency order of Parent Master files in the input .ESP|ESM data
 std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json& inputData, std::ofstream& logFile) {
     auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const ordered_json& item) {
@@ -388,15 +401,15 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
         return { false, {} };
     }
 
-    validMastersIN.clear();
-    validMastersDB.clear();
+    validMastersIn.clear();
+    validMastersDb.clear();
 
     if (tPos.has_value() && bPos.has_value()) {
         if (*tPos > *mwPos && *bPos > *tPos) {
             logMessage("Valid order of Parent Master files found: M+T+B\n", logFile);
-            validMastersIN = { 2, 3 };
-            validMastersDB = { 1 };
-            return { true, validMastersDB };
+            validMastersIn = { 2, 3 };
+            validMastersDb = { 1 };
+            return { true, validMastersDb };
         }
         logMessage("ERROR - invalid order of Parent Master files found: M+B+T\n", logFile);
         return { false, {} };
@@ -404,31 +417,31 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
 
     if (tPos.has_value() && *tPos > *mwPos) {
         logMessage("Valid order of Parent Master files found: M+T\n", logFile);
-        validMastersIN = { 2 };
-        validMastersDB = { 2 };
-        return { true, validMastersDB };
+        validMastersIn = { 2 };
+        validMastersDb = { 2 };
+        return { true, validMastersDb };
     }
 
     if (bPos.has_value() && *bPos > *mwPos) {
         logMessage("Valid order of Parent Master files found: M+B\n", logFile);
-        validMastersIN = { 2 };
-        validMastersDB = { 3 };
-        return { true, validMastersDB };
+        validMastersIn = { 2 };
+        validMastersDb = { 3 };
+        return { true, validMastersDb };
     }
 
     return { false, {} };
 }
 
 // Function to fetch the refr_index from the database
-std::optional<int> fetchRefIndex(const Database& db, const std::string& query, int refrIndexJSON, const std::string& idJSON) {
+std::optional<int> fetchRefIndex(const Database& db, const std::string& query, int refrIndexJson, const std::string& idJson) {
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
         return std::nullopt;
     }
 
     std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt_ptr(stmt, sqlite3_finalize);
-    sqlite3_bind_int(stmt, 1, refrIndexJSON);
-    sqlite3_bind_text(stmt, 2, idJSON.c_str(), idJSON.length(), SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 1, refrIndexJson);
+    sqlite3_bind_text(stmt, 2, idJson.c_str(), idJson.length(), SQLITE_STATIC);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         return sqlite3_column_int(stmt, 0);
@@ -444,7 +457,7 @@ enum FetchMode {
 
 // Template function to fetch ID from the database based on the fetch mode
 template <FetchMode mode>
-auto fetchID(const Database& db, int refrIndexJSON, int mastIndex, const std::unordered_set<int>& validMastersDB, int conversionChoice) {
+auto fetchID(const Database& db, int refrIndexJson, int mastIndex, const std::unordered_set<int>& validMastersDb, int conversionChoice) {
     std::string query;
 
     // Determine the query based on the conversion choice and fetch mode
@@ -465,12 +478,12 @@ auto fetchID(const Database& db, int refrIndexJSON, int mastIndex, const std::un
     }
 
     // Append conditions to the query based on the valid masters
-    if (validMastersDB.count(1)) {
+    if (validMastersDb.count(1)) {
         if (mastIndex == 2) query += " AND Master = 'Tribunal'";
         else if (mastIndex == 3) query += " AND Master = 'Bloodmoon'";
     }
-    else if (validMastersDB.count(2)) query += " AND Master = 'Tribunal'";
-    else if (validMastersDB.count(3)) query += " AND Master = 'Bloodmoon'";
+    else if (validMastersDb.count(2)) query += " AND Master = 'Tribunal'";
+    else if (validMastersDb.count(3)) query += " AND Master = 'Bloodmoon'";
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
@@ -478,46 +491,46 @@ auto fetchID(const Database& db, int refrIndexJSON, int mastIndex, const std::un
         else return -1;
     }
 
-    sqlite3_bind_int(stmt, 1, refrIndexJSON);
+    sqlite3_bind_int(stmt, 1, refrIndexJson);
 
     // Fetch the value based on the fetch mode
     if constexpr (mode == FETCH_DB_ID) {
-        std::string idDB;
+        std::string idDb;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char* idJSON = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            if (idJSON) idDB = idJSON;
+            const char* idJson = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            if (idJson) idDb = idJson;
         }
         sqlite3_finalize(stmt);
-        return idDB;
+        return idDb;
     }
     else {
-        int refrIndexDB = -1;
+        int refrIndexDb = -1;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
-            refrIndexDB = sqlite3_column_int(stmt, 0);
+            refrIndexDb = sqlite3_column_int(stmt, 0);
         }
         sqlite3_finalize(stmt);
-        return refrIndexDB;
+        return refrIndexDb;
     }
 }
 
 // Mismatch entry structure to store reference data discrepancies
 struct MismatchEntry {
-    int refrIndexJSON;    // Reference index from JSON
-    std::string idJSON;   // Object ID from JSON
-    std::string idDB;     // Expected ID from database
-    int refrIndexDB;      // Expected reference index from database
+    int refrIndexJson;    // Reference index from JSON
+    std::string idJson;   // Object ID from JSON
+    std::string idDb;     // Expected ID from database
+    int refrIndexDb;      // Expected reference index from database
 
     bool operator==(const MismatchEntry& other) const noexcept {
-        return refrIndexJSON == other.refrIndexJSON && idJSON == other.idJSON;
+        return refrIndexJson == other.refrIndexJson && idJson == other.idJson;
     }
 };
 
-//Hash function specialization for MismatchEntry
+// Hash function specialization for MismatchEntry
 namespace std {
     template<> struct hash<MismatchEntry> {
         size_t operator()(const MismatchEntry& e) const {
-            size_t h1 = hash<int>{}(e.refrIndexJSON);
-            size_t h2 = hash<string>{}(e.idJSON);
+            size_t h1 = hash<int>{}(e.refrIndexJson);
+            size_t h2 = hash<string>{}(e.idJson);
             return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
         }
     };
@@ -529,7 +542,7 @@ std::unordered_set<MismatchEntry> mismatchedEntries;
 // Function to process replacements and mismatches
 int processReplacementsAndMismatches(const Database& db, const ProgramOptions& options, const std::string& query, ordered_json& inputData,
     int conversionChoice, int& replacementsFlag,
-    const std::unordered_set<int>& validMastersDB,
+    const std::unordered_set<int>& validMastersDb,
     std::unordered_set<MismatchEntry>& mismatchedEntries,
     std::ofstream& logFile) {
 
@@ -540,76 +553,76 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
     }
 
     // Process each cell in the JSON array
-    for (auto cell_it = inputData.begin(); cell_it != inputData.end(); ++cell_it) {
+    for (auto cellIter = inputData.begin(); cellIter != inputData.end(); ++cellIter) {
 
         // Skip non-cell entries or cells without proper type
-        if (!cell_it->contains("type") || (*cell_it)["type"] != "Cell") continue;
+        if (!cellIter->contains("type") || (*cellIter)["type"] != "Cell") continue;
 
         // Extract references array from cell
-        auto& references = (*cell_it)["references"];
-        if (!references.is_array()) continue;
+        auto& cellReferences = (*cellIter)["references"];
+        if (!cellReferences.is_array()) continue;
 
         // Process individual references in cell
-        for (auto ref_it = references.begin(); ref_it != references.end(); ++ref_it) {
-            auto& refr_index = *ref_it;
+        for (auto refIter = cellReferences.begin(); refIter != cellReferences.end(); ++refIter) {
+            auto& referenceData = *refIter;
 
             // Validate reference structure
-            if (!refr_index.contains("refr_index") || !refr_index["refr_index"].is_number_integer() ||
-                !refr_index.contains("id") || !refr_index["id"].is_string()) {
+            if (!referenceData.contains("refr_index") || !referenceData["refr_index"].is_number_integer() ||
+                !referenceData.contains("id") || !referenceData["id"].is_string()) {
                 continue;
             }
 
             // Extract reference data
-            int refrIndexExtracted = refr_index["refr_index"];
-            std::string idExtracted = refr_index["id"];
-            int mastIndexExtracted = refr_index.value("mast_index", -1);
+            int inputRefIndex = referenceData["refr_index"];
+            std::string inputId = referenceData["id"];
+            int inputMastIndex = referenceData.value("mast_index", -1);
 
             // Valid Parent Master files check
-            if (!validMastersIN.count(mastIndexExtracted)) {
+            if (!validMastersIn.count(inputMastIndex)) {
                 //if (!options.silentMode) {
-                    //logMessage("Skipping object (invalid master index): " + idExtracted, logFile);
+                    //logMessage("Skipping object (invalid master index): " + inputId, logFile);
                 //}
                 continue;
             }
 
             // Handle replacements
-            if (auto new_refrIndex = fetchRefIndex(db, query, refrIndexExtracted, idExtracted)) {
-                refr_index["refr_index"] = *new_refrIndex;
+            if (auto foundRefIndex = fetchRefIndex(db, query, inputRefIndex, inputId)) {
+                referenceData["refr_index"] = *foundRefIndex;
                 if (!options.silentMode) {
-                    logMessage("Replaced JSON refr_index " + std::to_string(refrIndexExtracted) +
-                               " with DB refr_index " + std::to_string(*new_refrIndex) +
-                               " for JSON id " + idExtracted, logFile);
+                    logMessage("Replaced JSON refr_index " + std::to_string(inputRefIndex) +
+                               " with DB refr_index " + std::to_string(*foundRefIndex) +
+                               " for JSON id " + inputId, logFile);
                 }
                 replacementsFlag = 1;
             }
 
             // Handle mismatches
             else {
-                const int refrIndexDB = fetchID<FETCH_OPPOSITE_REFR_INDEX>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+                const int refrIndexDb = fetchID<FETCH_OPPOSITE_REFR_INDEX>(db, inputRefIndex, inputMastIndex, validMastersDb, conversionChoice);
 
                 // Skip if no matching record found in DB
-                if (refrIndexDB == -1) {
+                if (refrIndexDb == -1) {
                     //if (!options.silentMode) {
-                        //logMessage("Skipping object (no match in DB): JSON refr_index " + std::to_string(refrIndexExtracted) +
-                        //           " and JSON id " + idExtracted, logFile);
+                        //logMessage("Skipping object (no match in DB): JSON refr_index " + std::to_string(inputRefIndex) +
+                        //           " and JSON id " + inputId, logFile);
                     //}
                     continue;
                 }
 
-                const std::string idDB = fetchID<FETCH_DB_ID>(db, refrIndexExtracted, mastIndexExtracted, validMastersDB, conversionChoice);
+                const std::string idDb = fetchID<FETCH_DB_ID>(db, inputRefIndex, inputMastIndex, validMastersDb, conversionChoice);
 
                 // Only proceed with mismatch handling if we have valid DB data
                 if (!options.silentMode) {
-                    logMessage("Mismatch found for JSON refr_index " + std::to_string(refrIndexExtracted) +
-                               " and JSON id " + idExtracted + " with DB refr_index " + std::to_string(refrIndexDB) +
-                               " and DB id " + idDB, logFile);
+                    logMessage("Mismatch found for JSON refr_index " + std::to_string(inputRefIndex) +
+                               " and JSON id " + inputId + " with DB refr_index " + std::to_string(refrIndexDb) +
+                               " and DB id " + idDb, logFile);
                 }
 
                 // Handle duplicated mismatches
                 if (auto [it, inserted] = mismatchedEntries.insert(
-                    MismatchEntry{ refrIndexExtracted, idExtracted, idDB, refrIndexDB }); !inserted) {
-                    logMessage("WARNING - skipped duplicate mismatch entry for JSON refr_index " + std::to_string(refrIndexExtracted) +
-                               " and JSON id " + idExtracted, logFile);
+                    MismatchEntry{ inputRefIndex, inputId, idDb, refrIndexDb }); !inserted) {
+                    logMessage("WARNING - skipped duplicate mismatch entry for JSON refr_index " + std::to_string(inputRefIndex) +
+                               " and JSON id " + inputId, logFile);
                 }
             }
         }
@@ -627,13 +640,13 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
 
                     // Find and update matching references
                     for (auto& reference : cell["references"]) {
-                        if (reference["refr_index"] == entry.refrIndexJSON &&
-                            reference.value("id", "") == entry.idJSON) {
-                            reference["refr_index"] = entry.refrIndexDB;
+                        if (reference["refr_index"] == entry.refrIndexJson &&
+                            reference.value("id", "") == entry.idJson) {
+                            reference["refr_index"] = entry.refrIndexDb;
                             if (!options.silentMode) {
-                                logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJSON) +
-                                           " with DB refr_index " + std::to_string(entry.refrIndexDB) +
-                                           " for JSON id " + entry.idJSON, logFile);
+                                logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJson) +
+                                           " with DB refr_index " + std::to_string(entry.refrIndexDb) +
+                                           " for JSON id " + entry.idJson, logFile);
                             }
                             replacementsFlag = 1;
                         }
@@ -650,6 +663,66 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
     }
 
     return 0;
+}
+
+// Function to add conversion tag to the header description
+bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, std::ofstream& logFile) {
+    // Find the Header block in JSON
+    auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const auto& item) {
+        return item.contains("type") && item["type"] == "Header";
+    });
+
+    if (headerIter != inputData.end() && headerIter->contains("description")) {
+        // Get current description
+        std::string currentDesc = (*headerIter)["description"];
+
+        // Add conversion tag
+        std::string conversionTag = "\r\n\r\nConverted (" + convPrefix + ") by TES3 Ref_Ind Converter";
+        if (currentDesc.find(conversionTag) == std::string::npos) {
+            (*headerIter)["description"] = currentDesc + conversionTag;
+            logMessage("\nAdding conversion tag to the file header...", logFile);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+// Function to create backup with automatic numbering
+bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile) {
+    std::filesystem::path backupPath;
+    int counter = 0;
+    const int maxBackups = 1000;
+
+    try {
+        // First try simple .bac extension
+        backupPath = filePath;
+        backupPath += ".bac";
+
+        // If simple backup exists, find next available numbered version
+        while (std::filesystem::exists(backupPath) && counter < maxBackups) {
+            backupPath = filePath;
+            backupPath += std::format(".{:03d}.bac", counter++);
+        }
+
+        // Safety check to prevent infinite loops
+        if (counter >= maxBackups) {
+            logMessage("ERROR - reached maximum backup count (" + std::to_string(maxBackups) +
+                       ") for file: " + filePath.string(), logFile);
+            return false;
+        }
+
+        // Perform the actual backup by renaming the file
+        std::filesystem::rename(filePath, backupPath);
+        logMessage("Original file backed up as: " + backupPath.string(), logFile);
+        return true;
+    }
+    catch (const std::exception& e) {
+        // Log any errors that occur during backup process
+        logMessage("ERROR - failed to create backup: " + filePath.string() +
+                   ": " + e.what(), logFile);
+        return false;
+    }
 }
 
 // Function to save the modified JSON data to file
@@ -747,8 +820,8 @@ int main(int argc, char* argv[]) {
         auto fileStart = std::chrono::high_resolution_clock::now();
 
         // Clear data
-        validMastersIN.clear();
-        validMastersDB.clear();
+        validMastersIn.clear();
+        validMastersDb.clear();
         mismatchedEntries.clear();
 
         logMessage("\nProcessing file: " + pluginImportPath.string(), logFile);
@@ -794,12 +867,20 @@ int main(int argc, char* argv[]) {
 
             inputFile.close();
 
+            // Check if file was already converted
+            if (hasConversionTag(inputData, pluginImportPath, logFile)) {
+                std::filesystem::remove(jsonImportPath);
+                logMessage("File " + pluginImportPath.string() + " was already converted - conversion skipped...", logFile);
+                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                continue;
+            }
+
             // Check the dependency order
             auto [isValid, validMasters] = checkDependencyOrder(inputData, logFile);
             if (!isValid) {
                 std::filesystem::remove(jsonImportPath);
-                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
                 logMessage("ERROR - required Parent Master files dependency not found, or their order is invalid for file: " + pluginImportPath.string(), logFile);
+                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
                 continue;
             }
 
@@ -820,16 +901,22 @@ int main(int argc, char* argv[]) {
             // Check if any replacements were made
             if (replacementsFlag == 0) {
                 std::filesystem::remove(jsonImportPath);
-                logMessage("No replacements found for file: " + pluginImportPath.string() + " - conversion skipped\n", logFile);
+                logMessage("No replacements found for file: " + pluginImportPath.string() + " - conversion skipped...\n", logFile);
                 logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
                 continue;
             }
 
             // Define conversion prefix
-            std::string convPrefix = (options.conversionType == 1) ? "RUtoEN" : "ENtoRU";
+            std::string convPrefix = (options.conversionType == 1) ? "RU->EN" : "EN->RU";
+
+            // Add conversion tag to header
+            if (!addConversionTag(inputData, convPrefix, logFile)) {
+                logMessage("ERROR - could not find or modify header description", logFile);
+                continue;
+            }
 
             // Save the modified data to .JSON file
-            auto newJsonName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), ".json");
+            auto newJsonName = std::format("TEMP_{}{}", pluginImportPath.stem().string(), ".json");
             std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
 
             if (!saveJsonToFile(jsonExportPath, inputData, logFile)) {
@@ -837,12 +924,16 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
-            // Convert the .JSON file back to .ESP|ESM
-            auto pluginExportName = std::format("CONV_{}_{}{}", convPrefix, pluginImportPath.stem().string(), pluginImportPath.extension().string());
-            std::filesystem::path pluginExportPath = pluginImportPath.parent_path() / pluginExportName;
+            // Create backup before modifying original file
+            if (!createBackup(pluginImportPath, logFile)) {
+                std::filesystem::remove(jsonImportPath);
+                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string(), logFile);
+                continue;
+            }
 
-            if (!convertJsonToEsp(jsonExportPath, pluginExportPath, logFile)) {
-                logMessage("ERROR - failed to convert .JSON back to .ESP|ESM: " + pluginExportPath.string(), logFile);
+            // Save converted file with original name
+            if (!convertJsonToEsp(jsonExportPath, pluginImportPath, logFile)) {
+                logMessage("ERROR - failed to convert .JSON back to .ESP|ESM: " + pluginImportPath.string(), logFile);
                 continue;
             }
 
@@ -865,8 +956,8 @@ int main(int argc, char* argv[]) {
             logMessage("ERROR processing " + pluginImportPath.string() + ": " + e.what(), logFile);
 
             // Clear data in case of error
-            validMastersIN.clear();
-            validMastersDB.clear();
+            validMastersIn.clear();
+            validMastersDb.clear();
             mismatchedEntries.clear();
             continue;
         }
