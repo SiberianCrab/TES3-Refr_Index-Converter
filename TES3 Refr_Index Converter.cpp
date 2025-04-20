@@ -314,8 +314,8 @@ bool hasConversionTag(const ordered_json& inputData, const std::filesystem::path
     if (headerIter != inputData.end() && headerIter->contains("description")) {
         std::string description = (*headerIter)["description"];
         // Check conversion markers in the description
-        if (description.find("Converted (Ru->En) by TES3 Ref_Ind Converter") != std::string::npos ||
-            description.find("Converted (En->Ru) by TES3 Ref_Ind Converter") != std::string::npos) {
+        if (description.find("Converted (RU->EN) by TES3 Ref_Ind Converter") != std::string::npos ||
+            description.find("Converted (EN->RU) by TES3 Ref_Ind Converter") != std::string::npos) {
 
             return true;
         }
