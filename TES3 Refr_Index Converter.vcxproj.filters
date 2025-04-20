@@ -24,7 +24,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="TES3 Refr_Index Converter.cpp">
+    <ClCompile Include="tes3_ri_converter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="database.cpp">
@@ -32,7 +32,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="TES3 Refr_Index Converter.rc">
+    <ResourceCompile Include="tes3_ri_converter.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>

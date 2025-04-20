@@ -20,14 +20,14 @@ if(WIN32)
     
     # Resource files
     set(RESOURCE_FILES
-        "TES3 Refr_Index Converter.rc"
+        "tes3_ri_converter.rc"
         "resource.h"
         "Icon.ico"
     )
     
     # Parse version info from RC file
-    if(EXISTS "TES3 Refr_Index Converter.rc")
-        file(STRINGS "TES3 Refr_Index Converter.rc" RC_VERSION_LINES REGEX "FILEVERSION|PRODUCTVERSION")
+    if(EXISTS "tes3_ri_converter.rc")
+        file(STRINGS "tes3_ri_converter.rc" RC_VERSION_LINES REGEX "FILEVERSION|PRODUCTVERSION")
         if(RC_VERSION_LINES)
         	# Extract version
             string(REGEX MATCH "FILEVERSION ([0-9]+,[0-9]+,[0-9]+,[0-9]+)" _ ${RC_VERSION_LINES})
@@ -47,7 +47,7 @@ endif()
 
 # Source files
 set(SOURCES
-    "TES3 Refr_Index Converter.cpp"
+    "tes3_ri_converter.cpp"
     "database.cpp"
     ${RESOURCE_FILES}
 )

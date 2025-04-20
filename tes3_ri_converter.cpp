@@ -93,7 +93,7 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
             std::cout << "TES3 Refr_Index Converter - Help\n"
                 << "================================\n\n"
                 << "Usage:\n"
-                << "  .\\\"TES3 Refr_Index Converter.exe\" [OPTIONS] [TARGETS]\n\n"
+                << "  .\\tes3_ri_converter.exe [OPTIONS] [TARGETS]\n\n"
                 << "Options:\n"
                 << "  -b, --batch      Enable batch mode (required when processing multiple files)\n"
                 << "  -s, --silent     Suppress non-critical messages (faster conversion)\n"
