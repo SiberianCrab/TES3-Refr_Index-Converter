@@ -47,6 +47,7 @@ struct ProgramOptions {
     int conversionType = 0;
 };
 
+// Function to parse arguments
 ProgramOptions parseArguments(int argc, char* argv[]) {
     ProgramOptions options;
 
