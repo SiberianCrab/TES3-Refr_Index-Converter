@@ -1,10 +1,12 @@
-#include "ri_arguments.h"
-#include "ri_logger.h"
-#include "ri_user_interaction.h"
 #include <filesystem>
 #include <algorithm>
 #include <iostream>
+#include <sstream>
 #include <string>
+
+#include "ri_arguments.h"
+#include "ri_logger.h"
+#include "ri_user_interaction.h"
 
 // Unified function for handling user choices
 int getUserChoice(const std::string& prompt,

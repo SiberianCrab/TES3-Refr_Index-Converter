@@ -1,7 +1,11 @@
 #pragma once
 #include <string>
 #include <unordered_set>
+#include <vector>
+#include <filesystem>
 #include <fstream>
+
+#include "ri_arguments.h"
 
 // Unified function for handling user choices
 int getUserChoice(const std::string& prompt, const std::unordered_set<std::string>& validChoices, std::ofstream& logFile);
