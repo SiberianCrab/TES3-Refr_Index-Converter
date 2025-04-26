@@ -1,8 +1,9 @@
-#include "ri_arguments.h"
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+
+#include "ri_arguments.h"
 
 // Function to parse command-line arguments
 ProgramOptions parseArguments(int argc, char* argv[]) {

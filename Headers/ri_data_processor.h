@@ -1,10 +1,11 @@
 #pragma once
+#include <unordered_set>
+#include <optional>
+
 #include "ri_arguments.h"
 #include "ri_database.h"
 #include "ri_globals.h"
 #include "ri_mismatches.h"
-#include <unordered_set>
-#include <optional>
 
 // Define an enumeration for fetch modes
 enum FetchMode {

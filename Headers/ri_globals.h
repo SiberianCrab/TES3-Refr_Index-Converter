@@ -1,7 +1,8 @@
 #pragma once
-#include "ri_mismatches.h"
 #include <json.hpp>
 #include <unordered_set>
+
+#include "ri_mismatches.h"
 
 // Define an alias for ordered_json type from the nlohmann library
 using ordered_json = nlohmann::ordered_json;
