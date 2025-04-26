@@ -35,17 +35,42 @@ const std::string TES3CONV_COMMAND = "tes3conv.exe";
 const std::string TES3CONV_COMMAND = "./tes3conv";
 #endif
 
-// Define sets to store valid master indices and masters from the database
-std::unordered_set<int> validMastersIn;
-std::unordered_set<int> validMastersDb;
-
-// Function to parse arguments
+// Structure for storing program configuration options
 struct ProgramOptions {
     bool batchMode = false;
     bool silentMode = false;
     std::vector<std::filesystem::path> inputFiles;
     int conversionType = 0;
 };
+
+// Represents a data mismatch between JSON source and database records
+struct MismatchEntry {
+    int refrIndexJson;    // Reference index from JSON data
+    std::string idJson;   // Object identifier from JSON data
+    std::string idDb;     // Expected object identifier from database
+    int refrIndexDb;      // Expected reference index from database
+
+    // Equality comparison operator
+    bool operator==(const MismatchEntry& other) const noexcept {
+        return refrIndexJson == other.refrIndexJson && idJson == other.idJson;
+    }
+};
+
+// Hash function specialization for MismatchEntry to enable unordered_set usage
+namespace std {
+    template<> struct hash<MismatchEntry> {
+        size_t operator()(const MismatchEntry& e) const {
+            size_t h1 = hash<int>{}(e.refrIndexJson);
+            size_t h2 = hash<string>{}(e.idJson);
+            return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+        }
+    };
+}
+
+// Global data structures for validation and mismatch tracking:
+std::unordered_set<int> validMastersIn;               // Valid master indices from input
+std::unordered_set<int> validMastersDb;               // Valid master indices from database
+std::unordered_set<MismatchEntry> mismatchedEntries;  // Collection of mismatched records
 
 // Function to parse arguments
 ProgramOptions parseArguments(int argc, char* argv[]) {
@@ -443,32 +468,6 @@ auto fetchID(const Database& db, int refrIndexJson, int mastIndex, const std::un
         return refrIndexDb;
     }
 }
-
-// Mismatch entry structure to store reference data discrepancies
-struct MismatchEntry {
-    int refrIndexJson;    // Reference index from JSON
-    std::string idJson;   // Object ID from JSON
-    std::string idDb;     // Expected ID from database
-    int refrIndexDb;      // Expected reference index from database
-
-    bool operator==(const MismatchEntry& other) const noexcept {
-        return refrIndexJson == other.refrIndexJson && idJson == other.idJson;
-    }
-};
-
-// Hash function specialization for MismatchEntry
-namespace std {
-    template<> struct hash<MismatchEntry> {
-        size_t operator()(const MismatchEntry& e) const {
-            size_t h1 = hash<int>{}(e.refrIndexJson);
-            size_t h2 = hash<string>{}(e.idJson);
-            return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
-        }
-    };
-}
-
-// Container for tracking unique mismatch entries using unordered_set
-std::unordered_set<MismatchEntry> mismatchedEntries;
 
 // Function to process replacements and mismatches
 int processReplacementsAndMismatches(const Database& db, const ProgramOptions& options, const std::string& query, ordered_json& inputData,
