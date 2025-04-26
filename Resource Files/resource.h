@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by TES3 Refr_Index Converter.rc
+// Used by tes3_ri_converter.rc
 //
 #define IDI_ICON1                       114
 

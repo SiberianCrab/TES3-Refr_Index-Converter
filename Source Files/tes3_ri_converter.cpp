@@ -17,6 +17,16 @@
 
 #include <json.hpp>
 #include "database.h"
+#include "logger.h"
+
+// Define an alias for ordered_json type from the nlohmann library
+using ordered_json = nlohmann::ordered_json;
+
+// Define program metadata constants
+const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
+const std::string PROGRAM_VERSION = "V 1.4.0";
+const std::string PROGRAM_AUTHOR = "by SiberianCrab";
+const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
 
 // Define tes3conv for Windows|Linux
 #ifdef _WIN32
@@ -25,41 +35,9 @@ const std::string TES3CONV_COMMAND = "tes3conv.exe";
 const std::string TES3CONV_COMMAND = "./tes3conv";
 #endif
 
-// Define an alias for ordered_json type from the nlohmann library
-using ordered_json = nlohmann::ordered_json;
-
-// Define program metadata constants
-const std::string PROGRAM_NAME = "TES3 Refr_Index Converter";
-const std::string PROGRAM_VERSION = "V 1.3.2";
-const std::string PROGRAM_AUTHOR = "by SiberianCrab";
-const std::string PROGRAM_TESTER = "Beta testing by Pirate443";
-
 // Define sets to store valid master indices and masters from the database
 std::unordered_set<int> validMastersIn;
 std::unordered_set<int> validMastersDb;
-
-// Function to clear log file
-void logClear() {
-    std::ofstream file("tes3_ri.log", std::ios::trunc);
-}
-
-// Function to log messages to both a log file and console
-void logMessage(const std::string& message, std::ofstream& logFile) {
-    logFile << message << std::endl;
-    std::cout << message << std::endl;
-}
-
-// Function to log errors, close the database and terminate the program
-void logErrorAndExit(const std::string& message, std::ofstream& logFile) {
-    logMessage(message, logFile);
-
-    logFile.close();
-
-    std::cout << "Press Enter to exit...";
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-    std::exit(EXIT_FAILURE);
-}
 
 // Function to parse arguments
 struct ProgramOptions {
@@ -90,33 +68,35 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
             options.conversionType = 2;
         }
         else if (argLower == "--help" || argLower == "-h") {
-            std::cout << "TES3 Refr_Index Converter - Help\n"
-                << "================================\n\n"
-                << "Usage:\n"
-                << "  .\\tes3_ri_converter.exe [OPTIONS] [TARGETS]\n\n"
-                << "Options:\n"
-                << "  -b, --batch      Enable batch mode (required when processing multiple files)\n"
-                << "  -s, --silent     Suppress non-critical messages (faster conversion)\n"
-                << "  -1, --ru-to-en   Convert Russian 1C -> English GOTY\n"
-                << "  -2, --en-to-ru   Convert English GOTY -> Russian 1C\n"
-                << "  -h, --help       Show this help message\n\n"
-                << "Target Formats:\n\n"
-                << "  Single File (works without batch mode):\n"
-                << "    mod-in-the-same-folder.esp\n"
-                << "    C:\\Morrowind\\Data Files\\mod.esm\n\n"
-                << "  Multiple Files (requires -b batch mode):\n"
-                << "    file1.esp;file2.esm;file 3.esp\n"
-                << "    D:\\Mods\\mod.esp;C:\\Morrowind\\Data Files\\Master mod.esm;Mod-in-the-same-folder.esp\n\n"
-                << "  Entire Directory (batch mode, recursive processing):\n"
-                << "    C:\\Morrowind\\Data Files\\\n"
-                << "    .\\Data\\  (relative path)\n\n";
+            std::cout << "================================\n"
+                      << "TES3 Refr_Index Converter - Help\n"
+                      << "================================\n\n"
+                      << "Usage:\n"
+                      << "  .\\tes3_ri_converter.exe [OPTIONS] [TARGETS]\n\n"
+                      << "Options:\n"
+                      << "  -b, --batch      Enable batch mode (required when processing multiple files)\n"
+                      << "  -s, --silent     Suppress non-critical messages (faster conversion)\n"
+                      << "  -1, --ru-to-en   Convert Russian 1C -> English GOTY\n"
+                      << "  -2, --en-to-ru   Convert English GOTY -> Russian 1C\n"
+                      << "  -h, --help       Show this help message\n\n"
+                      << "Target Formats:\n\n"
+                      << "  Single File (works without batch mode):\n"
+                      << "    mod-in-the-same-folder.esp\n"
+                      << "    C:\\Morrowind\\Data Files\\mod.esm\n\n"
+                      << "  Multiple Files (requires -b batch mode):\n"
+                      << "    file1.esp;file2.esm;file 3.esp\n"
+                      << "    D:\\Mods\\mod.esp;C:\\Morrowind\\Data Files\\Master mod.esm;Mod-in-the-same-folder.esp\n\n"
+                      << "  Entire Directory (batch mode, recursive processing):\n"
+                      << "    C:\\Morrowind\\Data Files\\\n"
+                      << "    .\\Data\\  (relative path)\n\n";
 
+            // Wait for user input before exiting (Windows)
         #ifndef __linux__
             std::cout << "\nPress Enter to exit...";
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         #endif
 
-            exit(0);
+            std::exit(EXIT_SUCCESS);
         }
         else {
             options.inputFiles.emplace_back(arg);
@@ -620,7 +600,7 @@ bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, st
     // Find the Header block in JSON
     auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const auto& item) {
         return item.contains("type") && item["type"] == "Header";
-    });
+        });
 
     if (headerIter != inputData.end() && headerIter->contains("description")) {
         // Get current description
@@ -669,8 +649,7 @@ bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile)
     }
     catch (const std::exception& e) {
         // Log any errors that occur during backup process
-        logMessage("ERROR - failed to create backup: " + filePath.string() +
-                   ": " + e.what(), logFile);
+        logMessage("ERROR - failed to create backup: " + filePath.string() + ": " + e.what(), logFile);
         return false;
     }
 }
@@ -678,9 +657,9 @@ bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile)
 // Function to save the modified JSON data to file
 bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_json& inputData, std::ofstream& logFile) {
     std::ofstream outputFile(jsonImportPath);
-        if (!outputFile) return false;
-        outputFile << std::setw(2) << inputData;
-            logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
+    if (!outputFile) return false;
+    outputFile << std::setw(2) << inputData;
+    logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
     return true;
 }
 
@@ -712,11 +691,15 @@ int main(int argc, char* argv[]) {
 
     // Log file initialisation
     std::ofstream logFile("tes3_ri.log", std::ios::app);
-    if (!logFile) {
-        std::cerr << "ERROR - failed to open log file!\n\n"
-                  << "Press Enter to exit...";
+    if (!logFile.is_open()) {
+        std::cout << "ERROR - failed to open log file!\n\n";
+
+        // Wait for user input before exiting (Windows)
+    #ifndef __linux__
+        std::cout << "\nPress Enter to exit...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        logFile.close();
+    #endif
+
         return EXIT_FAILURE;
     }
 
@@ -925,10 +908,10 @@ int main(int argc, char* argv[]) {
         logFile.close();
 
         // Wait for user input before exiting (Windows)
-        #ifndef __linux__
-        std::cout << "\nPress Enter to continue...";
+    #ifndef __linux__
+        std::cout << "\nPress Enter to exit...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        #endif
+    #endif
     }
 
     return EXIT_SUCCESS;
