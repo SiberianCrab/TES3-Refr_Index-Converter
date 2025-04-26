@@ -1,0 +1,169 @@
+#include "ri_constants.h"
+#include "ri_file_processor.h"
+#include "ri_globals.h"
+#include "ri_logger.h"
+#include <algorithm>
+#include <format>
+#include <cstdlib>
+
+// Function to check if file was already converted
+bool hasConversionTag(const ordered_json& inputData, const std::filesystem::path& filePath, std::ofstream& logFile) {
+    // Find the header section in the JSON data
+    auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const ordered_json& item) {
+        return item.contains("type") && item["type"] == "Header";
+        });
+
+    // Check if header contains a description field
+    if (headerIter != inputData.end() && headerIter->contains("description")) {
+        std::string description = (*headerIter)["description"];
+        // Check conversion markers in the description
+        if (description.find("Converted (RU->EN) by TES3 Ref_Ind Converter") != std::string::npos ||
+            description.find("Converted (EN->RU) by TES3 Ref_Ind Converter") != std::string::npos) {
+
+            return true;
+        }
+    }
+    return false;
+}
+
+// Function to check the dependency order of Parent Master files in the input .ESP|ESM data
+std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json& inputData, std::ofstream& logFile) {
+    auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const ordered_json& item) {
+        return item.contains("type") && item["type"] == "Header";
+        });
+
+    if (headerIter == inputData.end() || !headerIter->contains("masters")) {
+        logMessage("ERROR - missing 'header' section or 'masters' key!", logFile);
+        return { false, {} };
+    }
+
+    const auto& masters = (*headerIter)["masters"];
+    std::optional<size_t> mwPos, tPos, bPos;
+
+    for (size_t i = 0; i < masters.size(); ++i) {
+        if (masters[i].is_array() && !masters[i].empty() && masters[i][0].is_string()) {
+            const std::string masterName = masters[i][0];
+            if (masterName == "Morrowind.esm") mwPos.emplace(i);
+            else if (masterName == "Tribunal.esm") tPos.emplace(i);
+            else if (masterName == "Bloodmoon.esm") bPos.emplace(i);
+        }
+    }
+
+    if (!mwPos.has_value()) {
+        logMessage("ERROR - Morrowind.esm dependency not found!", logFile);
+        return { false, {} };
+    }
+
+    validMastersIn.clear();
+    validMastersDb.clear();
+
+    if (tPos.has_value() && bPos.has_value()) {
+        if (*tPos > *mwPos && *bPos > *tPos) {
+            logMessage("Valid order of Parent Master files found: M+T+B\n", logFile);
+            validMastersIn = { 2, 3 };
+            validMastersDb = { 1 };
+            return { true, validMastersDb };
+        }
+        logMessage("ERROR - invalid order of Parent Master files found: M+B+T\n", logFile);
+        return { false, {} };
+    }
+
+    if (tPos.has_value() && *tPos > *mwPos) {
+        logMessage("Valid order of Parent Master files found: M+T\n", logFile);
+        validMastersIn = { 2 };
+        validMastersDb = { 2 };
+        return { true, validMastersDb };
+    }
+
+    if (bPos.has_value() && *bPos > *mwPos) {
+        logMessage("Valid order of Parent Master files found: M+B\n", logFile);
+        validMastersIn = { 2 };
+        validMastersDb = { 3 };
+        return { true, validMastersDb };
+    }
+
+    return { false, {} };
+}
+
+// Function to add conversion tags to the header description
+bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, std::ofstream& logFile) {
+    // Find the Header block in JSON
+    auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const auto& item) {
+        return item.contains("type") && item["type"] == "Header";
+        });
+
+    if (headerIter != inputData.end() && headerIter->contains("description")) {
+        // Get current description
+        std::string currentDesc = (*headerIter)["description"];
+
+        // Add conversion tag
+        std::string conversionTag = "\r\n\r\nConverted (" + convPrefix + ") by TES3 Ref_Ind Converter";
+        if (currentDesc.find(conversionTag) == std::string::npos) {
+            (*headerIter)["description"] = currentDesc + conversionTag;
+            logMessage("\nAdding conversion tag to the file header...", logFile);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+// Function to create backup with automatic numbering
+bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile) {
+    std::filesystem::path backupPath;
+    int counter = 0;
+    const int maxBackups = 1000;
+
+    try {
+        // First try simple .bac extension
+        backupPath = filePath;
+        backupPath += ".bac";
+
+        // If simple backup exists, find next available numbered version
+        while (std::filesystem::exists(backupPath) && counter < maxBackups) {
+            backupPath = filePath;
+            backupPath += std::format(".{:03d}.bac", counter++);
+        }
+
+        // Safety check to prevent infinite loops
+        if (counter >= maxBackups) {
+            logMessage("ERROR - reached maximum backup count (" + std::to_string(maxBackups) +
+                ") for file: " + filePath.string(), logFile);
+            return false;
+        }
+
+        // Perform the actual backup by renaming the file
+        std::filesystem::rename(filePath, backupPath);
+        logMessage("Original file backed up as: " + backupPath.string(), logFile);
+        return true;
+    }
+    catch (const std::exception& e) {
+        // Log any errors that occur during backup process
+        logMessage("ERROR - failed to create backup: " + filePath.string() + ": " + e.what(), logFile);
+        return false;
+    }
+}
+
+// Function to save the modified JSON data to file
+bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_json& inputData, std::ofstream& logFile) {
+    std::ofstream outputFile(jsonImportPath);
+    if (!outputFile) return false;
+    outputFile << std::setw(2) << inputData;
+    logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
+    return true;
+}
+
+// Function to convert the .JSON file to .ESP|ESM
+bool convertJsonToEsp(const std::filesystem::path& jsonImportPath, const std::filesystem::path& espFilePath, std::ofstream& logFile) {
+    std::ostringstream command;
+    command << TES3CONV_COMMAND << " "
+        << std::quoted(jsonImportPath.string()) << " "
+        << std::quoted(espFilePath.string());
+
+    if (std::system(command.str().c_str()) != 0) {
+        return false;
+    }
+
+    logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string() + "\n", logFile);
+    return true;
+}

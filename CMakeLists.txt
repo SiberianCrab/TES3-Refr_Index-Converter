@@ -60,17 +60,30 @@ endif()
 # Source files
 set(SOURCES
     "${SOURCE_DIR}/tes3_ri_converter.cpp"
-    "${SOURCE_DIR}/database.cpp"
-    "${SOURCE_DIR}/logger.cpp"
+	"${SOURCE_DIR}/ri_arguments.cpp"
+    "${SOURCE_DIR}/ri_data_processor.cpp"
+    "${SOURCE_DIR}/ri_database.cpp"
+	"${SOURCE_DIR}/ri_file_processor.cpp"
+	"${SOURCE_DIR}/ri_globals.cpp"
+    "${SOURCE_DIR}/ri_logger.cpp"
+    "${SOURCE_DIR}/ri_mismatches.cpp"
+    "${SOURCE_DIR}/ri_user_interaction.cpp"
     ${RESOURCE_FILES}
 )
 
 # Headers
 set(HEADERS
-    "${HEADER_DIR}/database.h"
     "${HEADER_DIR}/json.hpp"
-    "${HEADER_DIR}/logger.h"
     "${HEADER_DIR}/sqlite3.h"
+    "${HEADER_DIR}/ri_arguments.h"
+    "${HEADER_DIR}/ri_constants.h"
+	"${HEADER_DIR}/ri_data_processor.h"
+	"${HEADER_DIR}/ri_database.h"
+	"${HEADER_DIR}/ri_file_processor.h"
+	"${HEADER_DIR}/ri_globals.h"
+    "${HEADER_DIR}/ri_logger.h"
+    "${HEADER_DIR}/ri_mismatches.h"
+    "${HEADER_DIR}/ri_user_interaction.h"
 )
 
 # Create executable
