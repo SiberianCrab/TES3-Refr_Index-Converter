@@ -64,7 +64,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
             validMastersDb = { 1 };
             return { true, validMastersDb };
         }
-        logMessage("ERROR - invalid order of Parent Master files found: M+B+T\n", logFile);
+        logMessage("ERROR - invalid order of Parent Master files found: M+B+T", logFile);
         return { false, {} };
     }
 

@@ -134,7 +134,7 @@ int main(int argc, char* argv[]) {
             // Check if file was already converted
             if (hasConversionTag(inputData, pluginImportPath, logFile)) {
                 std::filesystem::remove(jsonImportPath);
-                logMessage("File " + pluginImportPath.string() + " was already converted - conversion skipped...", logFile);
+                logMessage("ERROR - file " + pluginImportPath.string() + " was already converted - conversion skipped...", logFile);
                 if (options.silentMode) {
                     logMessage("", logFile);
                 }
@@ -149,8 +149,11 @@ int main(int argc, char* argv[]) {
             auto [isValid, validMasters] = checkDependencyOrder(inputData, logFile);
             if (!isValid) {
                 std::filesystem::remove(jsonImportPath);
-                logMessage("ERROR - required Parent Master files dependency not found, or their order is invalid for file: " + pluginImportPath.string(), logFile);
-                if (!options.silentMode) {
+                logMessage("ERROR - required Parent Master not found for file: " + pluginImportPath.string() + " - conversion skipped...", logFile);
+                if (options.silentMode) {
+                    logMessage("", logFile);
+                }
+                else {
                     logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
                 }
 
