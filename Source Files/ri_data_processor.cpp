@@ -12,9 +12,9 @@ std::optional<int> fetchRefIndex(const Database& db, const std::string& query, i
         return std::nullopt;
     }
 
-    std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt_ptr(stmt, sqlite3_finalize);
+    auto stmt_ptr = std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)>(stmt, sqlite3_finalize);
     sqlite3_bind_int(stmt_ptr.get(), 1, refrIndexJson);
-    sqlite3_bind_text(stmt_ptr.get(), 2, idJson.c_str(), static_cast<int>(idJson.length()), SQLITE_STATIC);
+    sqlite3_bind_text(stmt_ptr.get(), 2, idJson.c_str(), static_cast<int>(idJson.length()), SQLITE_TRANSIENT);
 
     if (sqlite3_step(stmt_ptr.get()) == SQLITE_ROW) {
         return sqlite3_column_int(stmt_ptr.get(), 0);
@@ -58,7 +58,7 @@ auto fetchID(const Database& db, int refrIndexJson, int mastIndex, const std::un
         else return -1;
     }
 
-    std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt_ptr(stmt, sqlite3_finalize);
+    auto stmt_ptr = std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)>(stmt, sqlite3_finalize);
     sqlite3_bind_int(stmt_ptr.get(), 1, refrIndexJson);
 
     // Fetch the value based on the fetch mode
