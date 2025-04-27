@@ -7,7 +7,7 @@ Database::Database(const std::string& filename) {
     if (result != SQLITE_OK) {
         const std::string error_msg = db_raw ? sqlite3_errmsg(db_raw) : "unknown error";
         if (db_raw) sqlite3_close(db_raw);
-        throw std::runtime_error("Failed to open database: " + error_msg);
+        throw std::runtime_error("ERROR - failed to open database: " + error_msg);
     }
 
     db_.reset(db_raw);

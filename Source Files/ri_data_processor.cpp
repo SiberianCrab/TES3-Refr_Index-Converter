@@ -161,7 +161,7 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
                 // Handle duplicated mismatches
                 if (auto [it, inserted] = mismatchedEntries.insert(
                     MismatchEntry{ inputRefIndex, inputId, idDb, refrIndexDb }); !inserted) {
-                    logMessage("WARNING - skipped duplicate mismatch entry for JSON refr_index " + std::to_string(inputRefIndex) +
+                    logMessage("WARNING - skipping duplicate mismatch entry for JSON refr_index " + std::to_string(inputRefIndex) +
                                " and JSON id " + inputId, logFile);
                 }
             }
