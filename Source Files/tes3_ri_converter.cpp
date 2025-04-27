@@ -220,7 +220,7 @@ int main(int argc, char* argv[]) {
             auto fileEnd = std::chrono::high_resolution_clock::now();
             auto fileDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileEnd - fileStart);
 
-            logMessage("ERROR processing " + pluginImportPath.string() + ": " + e.what(), logFile);
+            logMessage("ERROR - failed to process file " + pluginImportPath.string() + ": " + e.what(), logFile);
 
             // Clear data in case of error
             validMastersIn.clear();

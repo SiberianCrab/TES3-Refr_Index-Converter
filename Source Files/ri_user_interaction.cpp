@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <stdexcept>
 
 #include "ri_logger.h"
 #include "ri_options.h"
