@@ -86,7 +86,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
 }
 
 // Function to add conversion tags to the header description
-bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, std::ofstream& logFile) {
+bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, const ProgramOptions& options, std::ofstream& logFile) {
     // Find the Header block in JSON
     auto headerIter = std::find_if(inputData.begin(), inputData.end(), [](const auto& item) {
         return item.contains("type") && item["type"] == "Header";
@@ -100,7 +100,9 @@ bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, st
         std::string conversionTag = "\r\n\r\nConverted (" + convPrefix + ") by TES3 Ref_Ind Converter";
         if (currentDesc.find(conversionTag) == std::string::npos) {
             (*headerIter)["description"] = currentDesc + conversionTag;
-            logMessage("Adding conversion tag to the file header...", logFile);
+            if (!options.silentMode) {
+                logMessage("Adding conversion tag to the file header...", logFile);
+            }
         }
         return true;
     }
@@ -109,7 +111,7 @@ bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, st
 }
 
 // Function to create backup with automatic numbering
-bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile) {
+bool createBackup(const std::filesystem::path& filePath, const ProgramOptions& options, std::ofstream& logFile) {
     std::filesystem::path backupPath;
     int counter = 0;
     const int maxBackups = 1000;
@@ -134,7 +136,9 @@ bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile)
 
         // Perform the actual backup by renaming the file
         std::filesystem::rename(filePath, backupPath);
-        logMessage("Original file backed up as: " + backupPath.string() + "\n", logFile);
+        if (!options.silentMode) {
+            logMessage("Original file backed up as: " + backupPath.string() + "\n", logFile);
+        }
         return true;
     }
     catch (const std::exception& e) {
@@ -145,11 +149,13 @@ bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile)
 }
 
 // Function to save the modified JSON data to file
-bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_json& inputData, std::ofstream& logFile) {
+bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_json& inputData, const ProgramOptions& options, std::ofstream& logFile) {
     std::ofstream outputFile(jsonImportPath);
     if (!outputFile) return false;
     outputFile << std::setw(2) << inputData;
-    logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
+    if (!options.silentMode) {
+        logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
+    }
     return true;
 }
 

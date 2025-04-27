@@ -102,7 +102,9 @@ int main(int argc, char* argv[]) {
                 logMessage("ERROR - converting to .JSON failed for file: " + pluginImportPath.string(), logFile);
                 continue;
             }
-            logMessage("Conversion to .JSON successful: " + jsonImportPath.string(), logFile);
+            if (!options.silentMode) {
+                logMessage("Conversion to .JSON successful: " + jsonImportPath.string(), logFile);
+            }
 
             // Load the generated JSON file
             std::ifstream inputFile(jsonImportPath, std::ios::binary);
@@ -133,7 +135,13 @@ int main(int argc, char* argv[]) {
             if (hasConversionTag(inputData, pluginImportPath, logFile)) {
                 std::filesystem::remove(jsonImportPath);
                 logMessage("File " + pluginImportPath.string() + " was already converted - conversion skipped...", logFile);
-                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                if (options.silentMode) {
+                    logMessage("", logFile);
+                }
+                else {
+                    logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                }
+
                 continue;
             }
 
@@ -142,7 +150,10 @@ int main(int argc, char* argv[]) {
             if (!isValid) {
                 std::filesystem::remove(jsonImportPath);
                 logMessage("ERROR - required Parent Master files dependency not found, or their order is invalid for file: " + pluginImportPath.string(), logFile);
-                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                if (!options.silentMode) {
+                    logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                }
+
                 continue;
             }
 
@@ -155,20 +166,30 @@ int main(int argc, char* argv[]) {
                 : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
             // Process replacements and mismatches
-            logMessage("", logFile);
+            if (!options.silentMode) {
+                logMessage("", logFile);
+            }
 
             if (processReplacementsAndMismatches(db, options, dbQuery, inputData, options.conversionType, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
                 logMessage("ERROR - processing failed for file: " + pluginImportPath.string(), logFile);
                 continue;
             }
 
-            logMessage("", logFile);
+            if (!options.silentMode) {
+                logMessage("", logFile);
+            }
 
             // Check if any replacements were made
             if (replacementsFlag == 0) {
                 std::filesystem::remove(jsonImportPath);
                 logMessage("No replacements found for file: " + pluginImportPath.string() + " - conversion skipped...", logFile);
-                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                if (options.silentMode) {
+                    logMessage("", logFile);
+                }
+                else {
+                    logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
+                }
+
                 continue;
             }
 
@@ -176,7 +197,7 @@ int main(int argc, char* argv[]) {
             std::string convPrefix = (options.conversionType == 1) ? "RU->EN" : "EN->RU";
 
             // Add conversion tag to header
-            if (!addConversionTag(inputData, convPrefix, logFile)) {
+            if (!addConversionTag(inputData, convPrefix, options, logFile)) {
                 logMessage("ERROR - could not find or modify header description", logFile);
                 continue;
             }
@@ -185,15 +206,18 @@ int main(int argc, char* argv[]) {
             auto newJsonName = std::format("TEMP_{}{}", pluginImportPath.stem().string(), ".json");
             std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
 
-            if (!saveJsonToFile(jsonExportPath, inputData, logFile)) {
+            if (!saveJsonToFile(jsonExportPath, inputData, options, logFile)) {
                 logMessage("ERROR - failed to save modified data to .JSON file: " + jsonExportPath.string(), logFile);
                 continue;
             }
 
             // Create backup before modifying original file
-            if (!createBackup(pluginImportPath, logFile)) {
+            if (!createBackup(pluginImportPath, options, logFile)) {
                 std::filesystem::remove(jsonImportPath);
-                logMessage("Temporary .JSON file deleted: " + jsonImportPath.string(), logFile);
+                if (!options.silentMode) {
+                    logMessage("Temporary .JSON file deleted: " + jsonImportPath.string(), logFile);
+                }
+
                 continue;
             }
 
@@ -206,14 +230,18 @@ int main(int argc, char* argv[]) {
             // Clean up temporary .JSON files
             std::filesystem::remove(jsonImportPath);
             std::filesystem::remove(jsonExportPath);
-            logMessage("Temporary .JSON files deleted: " + jsonImportPath.string() + "\n" +
-                       "                          and: " + jsonExportPath.string(), logFile);
+            if (!options.silentMode) {
+                logMessage("Temporary .JSON files deleted: " + jsonImportPath.string() + "\n" +
+                           "                          and: " + jsonExportPath.string(), logFile);
+            }
 
             // Time file total
             auto fileEnd = std::chrono::high_resolution_clock::now();
             auto fileDuration = fileEnd - fileStart;
             auto seconds = std::chrono::duration<double>(fileDuration).count();
-            logMessage(std::format("\nFile processed in: {:.3f} seconds", seconds), logFile);
+            if (!options.silentMode) {
+                logMessage(std::format("\nFile processed in: {:.3f} seconds", seconds), logFile);
+            }
         }
         catch (const std::exception& e) {
             // Time error
@@ -234,7 +262,9 @@ int main(int argc, char* argv[]) {
     auto programEnd = std::chrono::high_resolution_clock::now();
     auto programDuration = programEnd - programStart;
     auto seconds = std::chrono::duration<double>(programDuration).count();
-    logMessage(std::format("\nTotal processing time: {:.3f} seconds", seconds), logFile);
+    if (!options.silentMode) {
+        logMessage(std::format("\nTotal processing time: {:.3f} seconds", seconds), logFile);
+    }
 
     // Close the database
     if (!options.silentMode) {

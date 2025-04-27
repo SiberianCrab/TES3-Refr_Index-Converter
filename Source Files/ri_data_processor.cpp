@@ -199,7 +199,9 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
         }
     }
     else {
-        logMessage("No mismatched entries found - skipping mismatch handling...", logFile);
+        if (!options.silentMode) {
+            logMessage("No mismatched entries found - skipping mismatch handling...", logFile);
+        }
     }
 
     return 0;

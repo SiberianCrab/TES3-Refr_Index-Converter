@@ -48,7 +48,9 @@ int getUserConversionChoice(std::ofstream& logFile) {
 // Function for handling user mismatch choices
 int getUserMismatchChoice(std::ofstream& logFile, const ProgramOptions& options) {
     if (options.batchMode) {
-        logMessage("\nBatch mode enabled - automatically replacing mismatched entries...\n", logFile);
+        if (!options.silentMode) {
+            logMessage("\nBatch mode enabled - automatically replacing mismatched entries...\n", logFile);
+        }
         return 1;
     }
 
