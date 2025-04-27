@@ -57,7 +57,7 @@ int getUserMismatchChoice(std::ofstream& logFile, const ProgramOptions& options)
     int choice = getUserChoice(
         "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
         "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
-        "1. Yes\n"
+        "1. Yes (Recommended)\n"
         "2. No\n"
         "Choice: ",
         { "1", "2" }, logFile
