@@ -4,8 +4,8 @@
 #include <sstream>
 #include <string>
 
-#include "ri_arguments.h"
 #include "ri_logger.h"
+#include "ri_options.h"
 #include "ri_user_interaction.h"
 
 // Unified function for handling user choices

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <limits>
 
-#include "ri_arguments.h"
+#include "ri_options.h"
 
 // Function to parse command-line arguments
 ProgramOptions parseArguments(int argc, char* argv[]) {

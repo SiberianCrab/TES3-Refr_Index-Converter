@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include "ri_arguments.h"
+#include "ri_options.h"
 
 // Unified function for handling user choices
 int getUserChoice(const std::string& prompt, const std::unordered_set<std::string>& validChoices, std::ofstream& logFile);
