@@ -28,15 +28,7 @@ int main(int argc, char* argv[]) {
     // Log file initialisation
     std::ofstream logFile("tes3_ri.log", std::ios::app);
     if (!logFile.is_open()) {
-        std::cout << "ERROR - failed to open log file!\n\n";
-
-        // Wait for user input before exiting (Windows)
-    #ifndef __linux__
-        std::cout << "\nPress Enter to exit...";
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    #endif
-
-        return EXIT_FAILURE;
+        logErrorAndExit("ERROR - failed to open log file!\n", logFile);
     }
 
     // Clear log file
@@ -66,7 +58,8 @@ int main(int argc, char* argv[]) {
 
     if (!options.silentMode) {
         logMessage("tes3conv found...\n"
-                   "Initialisation complete.", logFile);
+                   "Initialisation complete...\n"
+                   "(\\/)Oo(\\/)", logFile);
     }
 
     // Get the conversion choice
@@ -93,7 +86,7 @@ int main(int argc, char* argv[]) {
         validMastersDb.clear();
         mismatchedEntries.clear();
 
-        logMessage("\nProcessing file: " + pluginImportPath.string(), logFile);
+        logMessage("Processing file: " + pluginImportPath.string(), logFile);
 
         try {
             // Define the output file path
@@ -162,15 +155,19 @@ int main(int argc, char* argv[]) {
                 : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
             // Process replacements and mismatches
+            logMessage("", logFile);
+
             if (processReplacementsAndMismatches(db, options, dbQuery, inputData, options.conversionType, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
                 logMessage("ERROR - processing failed for file: " + pluginImportPath.string(), logFile);
                 continue;
             }
 
+            logMessage("", logFile);
+
             // Check if any replacements were made
             if (replacementsFlag == 0) {
                 std::filesystem::remove(jsonImportPath);
-                logMessage("No replacements found for file: " + pluginImportPath.string() + " - conversion skipped...\n", logFile);
+                logMessage("No replacements found for file: " + pluginImportPath.string() + " - conversion skipped...", logFile);
                 logMessage("Temporary .JSON file deleted: " + jsonImportPath.string() + "\n", logFile);
                 continue;
             }
@@ -210,13 +207,13 @@ int main(int argc, char* argv[]) {
             std::filesystem::remove(jsonImportPath);
             std::filesystem::remove(jsonExportPath);
             logMessage("Temporary .JSON files deleted: " + jsonImportPath.string() + "\n" +
-                       "                          and: " + jsonExportPath.string() + "\n", logFile);
+                       "                          and: " + jsonExportPath.string(), logFile);
 
             // Time file total
             auto fileEnd = std::chrono::high_resolution_clock::now();
             auto fileDuration = fileEnd - fileStart;
             auto seconds = std::chrono::duration<double>(fileDuration).count();
-            logMessage(std::format("File processed in: {:.3f} seconds", seconds), logFile);
+            logMessage(std::format("\nFile processed in: {:.3f} seconds", seconds), logFile);
         }
         catch (const std::exception& e) {
             // Time error

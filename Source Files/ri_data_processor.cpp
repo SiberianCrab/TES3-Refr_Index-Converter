@@ -194,11 +194,11 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
             }
         }
         else {
-            logMessage("\nMismatched entries will remain unchanged...", logFile);
+            logMessage("Mismatched entries will remain unchanged...", logFile);
         }
     }
     else {
-        logMessage("\nNo mismatched entries found - skipping mismatch handling", logFile);
+        logMessage("No mismatched entries found - skipping mismatch handling...", logFile);
     }
 
     return 0;

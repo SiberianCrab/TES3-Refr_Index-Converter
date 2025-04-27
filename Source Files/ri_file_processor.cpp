@@ -59,7 +59,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
 
     if (tPos.has_value() && bPos.has_value()) {
         if (*tPos > *mwPos && *bPos > *tPos) {
-            logMessage("Valid order of Parent Master files found: M+T+B\n", logFile);
+            logMessage("Valid order of Parent Master files found: M+T+B", logFile);
             validMastersIn = { 2, 3 };
             validMastersDb = { 1 };
             return { true, validMastersDb };
@@ -69,14 +69,14 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
     }
 
     if (tPos.has_value() && *tPos > *mwPos) {
-        logMessage("Valid order of Parent Master files found: M+T\n", logFile);
+        logMessage("Valid order of Parent Master files found: M+T", logFile);
         validMastersIn = { 2 };
         validMastersDb = { 2 };
         return { true, validMastersDb };
     }
 
     if (bPos.has_value() && *bPos > *mwPos) {
-        logMessage("Valid order of Parent Master files found: M+B\n", logFile);
+        logMessage("Valid order of Parent Master files found: M+B", logFile);
         validMastersIn = { 2 };
         validMastersDb = { 3 };
         return { true, validMastersDb };
@@ -100,7 +100,7 @@ bool addConversionTag(ordered_json& inputData, const std::string& convPrefix, st
         std::string conversionTag = "\r\n\r\nConverted (" + convPrefix + ") by TES3 Ref_Ind Converter";
         if (currentDesc.find(conversionTag) == std::string::npos) {
             (*headerIter)["description"] = currentDesc + conversionTag;
-            logMessage("\nAdding conversion tag to the file header...", logFile);
+            logMessage("Adding conversion tag to the file header...", logFile);
         }
         return true;
     }
@@ -128,13 +128,13 @@ bool createBackup(const std::filesystem::path& filePath, std::ofstream& logFile)
         // Safety check to prevent infinite loops
         if (counter >= maxBackups) {
             logMessage("ERROR - reached maximum backup count (" + std::to_string(maxBackups) +
-                ") for file: " + filePath.string(), logFile);
+                       ") for file: " + filePath.string(), logFile);
             return false;
         }
 
         // Perform the actual backup by renaming the file
         std::filesystem::rename(filePath, backupPath);
-        logMessage("Original file backed up as: " + backupPath.string(), logFile);
+        logMessage("Original file backed up as: " + backupPath.string() + "\n", logFile);
         return true;
     }
     catch (const std::exception& e) {

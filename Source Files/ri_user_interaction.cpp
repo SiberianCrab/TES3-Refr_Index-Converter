@@ -29,7 +29,7 @@ int getUserChoice(const std::string& prompt,
             if (!validOptions.empty()) validOptions += " or ";
             validOptions += option;
         }
-        logMessage(errorMessage + validOptions, logFile);
+        std::cout << (errorMessage + validOptions) << '\n';
     }
 }
 
@@ -51,7 +51,7 @@ int getUserMismatchChoice(std::ofstream& logFile, const ProgramOptions& options)
         return 1;
     }
 
-    return getUserChoice(
+    int choice = getUserChoice(
         "\nMismatched entries found (usually occur if a Tribunal or Bloodmoon object was modified with\n"
         "'Edit -> Search & Replace' in TES3 CS). Would you like to replace their refr_index anyway?\n"
         "1. Yes\n"
@@ -59,6 +59,10 @@ int getUserMismatchChoice(std::ofstream& logFile, const ProgramOptions& options)
         "Choice: ",
         { "1", "2" }, logFile
     );
+
+    logMessage("", logFile);
+
+    return choice;
 }
 
 // Function for handling input file paths from user with recursive directory search
@@ -85,7 +89,7 @@ std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& optio
         try {
             if (std::filesystem::exists(path)) {
                 if (std::filesystem::is_directory(path)) {
-                    logMessage("Processing directory: " + path.string(), logFile);
+                    logMessage("\nProcessing directory: " + path.string(), logFile);
                     for (const auto& entry : std::filesystem::recursive_directory_iterator(path)) {
                         if (entry.is_regular_file() && isValidModFile(entry.path())) {
                             result.push_back(entry.path());
@@ -116,11 +120,14 @@ std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& optio
                 logMessage("  " + file.string(), logFile);
             }
         }
+
+        logMessage("", logFile);
+
         };
 
     // Use input files passed via command line arguments
     if (!options.inputFiles.empty()) {
-        logMessage("Using files from command line arguments:", logFile);
+        logMessage("\nUsing files from command line arguments", logFile);
         for (const auto& path : options.inputFiles) {
             tryAddFile(path);
         }
@@ -146,10 +153,10 @@ std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& optio
     if (options.batchMode) {
         while (true) {
             std::cout << "\nEnter:\n"
-                "- full path to your Mod folder\n"
-                "- full path to your .ESP|ESM file (with extension)\n"
-                "- file name of your .ESP|ESM file (with extension), if it is in the same directory with this program\n"
-                "You can mix any combination of the above formats, separating them with semicolons ';'\n";
+                         "- full path to your Mod folder\n"
+                         "- full path to your .ESP|ESM file (with extension)\n"
+                         "- file name of your .ESP|ESM file (with extension), if it is in the same directory with this program\n"
+                         "You can mix any combination of the above formats, separating them with semicolons ';'\n";
             std::string input;
             std::getline(std::cin, input);
 
@@ -163,24 +170,24 @@ std::vector<std::filesystem::path> getInputFilePaths(const ProgramOptions& optio
                 return result;
             }
 
-            logMessage("ERROR - input files not found: check their directory, names, and extensions!", logFile);
+            std::cout << "\nERROR - input files not found: check their directory, names, and extensions!\n";
         }
     }
 
     // Single file mode (one file input via prompt)
     while (true) {
         std::cout << "\nEnter full path to your .ESP|ESM or just filename (with extension), if your file is in the same directory\n"
-            "with this program: ";
+                     "with this program: ";
         std::string input;
         std::getline(std::cin, input);
 
         std::filesystem::path filePath = normalizePathStr(input);
 
         if (std::filesystem::exists(filePath) && isValidModFile(filePath)) {
-            logMessage("Input file found: " + filePath.string(), logFile);
+            logMessage("\nInput file found: " + filePath.string(), logFile);
             return { filePath };
         }
 
-        logMessage("\nERROR - input file not found: check its directory, name, and extension!", logFile);
+        std::cout << "\nERROR - input file not found: check its directory, name, and extension!\n";
     }
 }
