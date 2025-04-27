@@ -214,8 +214,9 @@ int main(int argc, char* argv[]) {
 
             // Time file total
             auto fileEnd = std::chrono::high_resolution_clock::now();
-            auto fileDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileEnd - fileStart);
-            logMessage("File processed in " + std::to_string(fileDuration.count() / 1000.0) + " seconds", logFile);
+            auto fileDuration = fileEnd - fileStart;
+            auto seconds = std::chrono::duration<double>(fileDuration).count();
+            logMessage(std::format("File processed in: {:.3f} seconds", seconds), logFile);
         }
         catch (const std::exception& e) {
             // Time error
@@ -234,9 +235,9 @@ int main(int argc, char* argv[]) {
 
     // Time total
     auto programEnd = std::chrono::high_resolution_clock::now();
-    auto programDuration = std::chrono::duration_cast<std::chrono::milliseconds>(programEnd - programStart);
-
-    logMessage("\nTotal processing time: " + std::to_string(programDuration.count() / 1000.0) + " seconds", logFile);
+    auto programDuration = programEnd - programStart;
+    auto seconds = std::chrono::duration<double>(programDuration).count();
+    logMessage(std::format("\nTotal processing time: {:.3f} seconds", seconds), logFile);
 
     // Close the database
     if (!options.silentMode) {
