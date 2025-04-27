@@ -2,10 +2,9 @@
 #include <format>
 #include <cstdlib>
 
-#include "ri_constants.h"
 #include "ri_file_processor.h"
-#include "ri_globals.h"
 #include "ri_logger.h"
+#include "ri_options.h"
 
 // Function to check if file was already converted
 bool hasConversionTag(const ordered_json& inputData, const std::filesystem::path& filePath, std::ofstream& logFile) {

@@ -141,7 +141,6 @@
     <ClCompile Include="Source Files\ri_database.cpp" />
     <ClCompile Include="Source Files\ri_data_processor.cpp" />
     <ClCompile Include="Source Files\ri_file_processor.cpp" />
-    <ClCompile Include="Source Files\ri_globals.cpp" />
     <ClCompile Include="Source Files\ri_logger.cpp" />
     <ClCompile Include="Source Files\ri_mismatches.cpp" />
     <ClCompile Include="Source Files\ri_options.cpp" />
@@ -150,11 +149,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Headers\json.hpp" />
-    <ClInclude Include="Headers\ri_constants.h" />
     <ClInclude Include="Headers\ri_database.h" />
     <ClInclude Include="Headers\ri_data_processor.h" />
     <ClInclude Include="Headers\ri_file_processor.h" />
-    <ClInclude Include="Headers\ri_globals.h" />
     <ClInclude Include="Headers\ri_logger.h" />
     <ClInclude Include="Headers\ri_mismatches.h" />
     <ClInclude Include="Headers\ri_options.h" />

@@ -1,6 +1,6 @@
 #include "ri_data_processor.h"
-#include "ri_globals.h"
 #include "ri_logger.h"
+#include "ri_options.h"
 #include "ri_user_interaction.h"
 
 // Function to fetch the refr_index from the database

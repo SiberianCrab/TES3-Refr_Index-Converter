@@ -7,11 +7,9 @@
 #include <limits>
 #include <string>
 
-#include "ri_constants.h"
 #include "ri_data_processor.h"
 #include "ri_database.h"
 #include "ri_file_processor.h"
-#include "ri_globals.h"
 #include "ri_logger.h"
 #include "ri_options.h"
 #include "ri_user_interaction.h"

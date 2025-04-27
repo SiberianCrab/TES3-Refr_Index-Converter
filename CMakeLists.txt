@@ -60,13 +60,12 @@ endif()
 # Source files
 set(SOURCES
     "${SOURCE_DIR}/tes3_ri_converter.cpp"
-	"${SOURCE_DIR}/ri_arguments.cpp"
     "${SOURCE_DIR}/ri_data_processor.cpp"
     "${SOURCE_DIR}/ri_database.cpp"
 	"${SOURCE_DIR}/ri_file_processor.cpp"
-	"${SOURCE_DIR}/ri_globals.cpp"
     "${SOURCE_DIR}/ri_logger.cpp"
     "${SOURCE_DIR}/ri_mismatches.cpp"
+	"${SOURCE_DIR}/ri_options.cpp"
     "${SOURCE_DIR}/ri_user_interaction.cpp"
     ${RESOURCE_FILES}
 )
@@ -75,14 +74,12 @@ set(SOURCES
 set(HEADERS
     "${HEADER_DIR}/json.hpp"
     "${HEADER_DIR}/sqlite3.h"
-    "${HEADER_DIR}/ri_arguments.h"
-    "${HEADER_DIR}/ri_constants.h"
 	"${HEADER_DIR}/ri_data_processor.h"
 	"${HEADER_DIR}/ri_database.h"
 	"${HEADER_DIR}/ri_file_processor.h"
-	"${HEADER_DIR}/ri_globals.h"
     "${HEADER_DIR}/ri_logger.h"
     "${HEADER_DIR}/ri_mismatches.h"
+    "${HEADER_DIR}/ri_options.h"
     "${HEADER_DIR}/ri_user_interaction.h"
 )
 

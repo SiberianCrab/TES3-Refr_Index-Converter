@@ -3,7 +3,6 @@
 #include <optional>
 
 #include "ri_database.h"
-#include "ri_globals.h"
 #include "ri_mismatches.h"
 #include "ri_options.h"
 

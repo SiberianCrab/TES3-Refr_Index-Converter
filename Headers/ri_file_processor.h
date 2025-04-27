@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include "ri_globals.h"
+#include "ri_options.h"
 
 // Function to check if file was already converted
 bool hasConversionTag(const ordered_json& inputData, const std::filesystem::path& filePath, std::ofstream& logFile);
