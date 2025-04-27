@@ -1,3 +1,5 @@
+#include "json.hpp"
+
 #include "ri_data_processor.h"
 #include "ri_logger.h"
 #include "ri_options.h"
@@ -11,11 +13,11 @@ std::optional<int> fetchRefIndex(const Database& db, const std::string& query, i
     }
 
     std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt_ptr(stmt, sqlite3_finalize);
-    sqlite3_bind_int(stmt, 1, refrIndexJson);
-    sqlite3_bind_text(stmt, 2, idJson.c_str(), static_cast<int>(idJson.length()), SQLITE_STATIC);
+    sqlite3_bind_int(stmt_ptr.get(), 1, refrIndexJson);
+    sqlite3_bind_text(stmt_ptr.get(), 2, idJson.c_str(), static_cast<int>(idJson.length()), SQLITE_STATIC);
 
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        return sqlite3_column_int(stmt, 0);
+    if (sqlite3_step(stmt_ptr.get()) == SQLITE_ROW) {
+        return sqlite3_column_int(stmt_ptr.get(), 0);
     }
     return std::nullopt;
 }
@@ -50,30 +52,29 @@ auto fetchID(const Database& db, int refrIndexJson, int mastIndex, const std::un
     else if (validMastersDb.count(2)) query += " AND Master = 'Tribunal'";
     else if (validMastersDb.count(3)) query += " AND Master = 'Bloodmoon'";
 
-    sqlite3_stmt* stmt;
+    sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
         if constexpr (mode == FETCH_DB_ID) return std::string();
         else return -1;
     }
 
-    sqlite3_bind_int(stmt, 1, refrIndexJson);
+    std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> stmt_ptr(stmt, sqlite3_finalize);
+    sqlite3_bind_int(stmt_ptr.get(), 1, refrIndexJson);
 
     // Fetch the value based on the fetch mode
     if constexpr (mode == FETCH_DB_ID) {
         std::string idDb;
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char* idJson = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        if (sqlite3_step(stmt_ptr.get()) == SQLITE_ROW) {
+            const char* idJson = reinterpret_cast<const char*>(sqlite3_column_text(stmt_ptr.get(), 0));
             if (idJson) idDb = idJson;
         }
-        sqlite3_finalize(stmt);
         return idDb;
     }
     else {
         int refrIndexDb = -1;
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            refrIndexDb = sqlite3_column_int(stmt, 0);
+        if (sqlite3_step(stmt_ptr.get()) == SQLITE_ROW) {
+            refrIndexDb = sqlite3_column_int(stmt_ptr.get(), 0);
         }
-        sqlite3_finalize(stmt);
         return refrIndexDb;
     }
 }
