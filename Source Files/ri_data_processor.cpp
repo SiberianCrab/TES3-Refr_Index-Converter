@@ -129,8 +129,8 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
                 referenceData["refr_index"] = *foundRefIndex;
                 if (!options.silentMode) {
                     logMessage("Replaced JSON refr_index " + std::to_string(inputRefIndex) +
-                        " with DB refr_index " + std::to_string(*foundRefIndex) +
-                        " for JSON id " + inputId, logFile);
+                               " with DB refr_index " + std::to_string(*foundRefIndex) +
+                               " for JSON id " + inputId, logFile);
                 }
                 replacementsFlag = 1;
             }
@@ -153,15 +153,15 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
                 // Only proceed with mismatch handling if we have valid DB data
                 if (!options.silentMode) {
                     logMessage("Mismatch found for JSON refr_index " + std::to_string(inputRefIndex) +
-                        " and JSON id " + inputId + " with DB refr_index " + std::to_string(refrIndexDb) +
-                        " and DB id " + idDb, logFile);
+                               " and JSON id " + inputId + " with DB refr_index " + std::to_string(refrIndexDb) +
+                               " and DB id " + idDb, logFile);
                 }
 
                 // Handle duplicated mismatches
                 if (auto [it, inserted] = mismatchedEntries.insert(
                     MismatchEntry{ inputRefIndex, inputId, idDb, refrIndexDb }); !inserted) {
                     logMessage("WARNING - skipped duplicate mismatch entry for JSON refr_index " + std::to_string(inputRefIndex) +
-                        " and JSON id " + inputId, logFile);
+                               " and JSON id " + inputId, logFile);
                 }
             }
         }
@@ -184,8 +184,8 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
                             reference["refr_index"] = entry.refrIndexDb;
                             if (!options.silentMode) {
                                 logMessage("Replaced mismatched JSON refr_index " + std::to_string(entry.refrIndexJson) +
-                                    " with DB refr_index " + std::to_string(entry.refrIndexDb) +
-                                    " for JSON id " + entry.idJson, logFile);
+                                           " with DB refr_index " + std::to_string(entry.refrIndexDb) +
+                                           " for JSON id " + entry.idJson, logFile);
                             }
                             replacementsFlag = 1;
                         }

@@ -37,7 +37,7 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
                       << "TES3 Refr_Index Converter - Help\n"
                       << "================================\n\n"
                       << "Usage:\n"
-                      << "  .\\tes3_ri_converter.exe [OPTIONS] [TARGETS]\n\n"
+                      << "  .\\tes3_ri_converter.exe [OPTIONS] \"[TARGETS]\"\n\n"
                       << "Options:\n"
                       << "  -b, --batch      Enable batch mode (required when processing multiple files)\n"
                       << "  -s, --silent     Suppress non-critical messages (faster conversion)\n"
@@ -53,7 +53,8 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
                       << "    D:\\Mods\\mod.esp;C:\\Morrowind\\Data Files\\Master mod.esm;Mod-in-the-same-folder.esp\n\n"
                       << "  Entire Directory (batch mode, recursive processing):\n"
                       << "    C:\\Morrowind\\Data Files\\\n"
-                      << "    .\\Data\\  (relative path)\n\n";
+                      << "    .\\Data\\  (relative path)\n\n\n"
+                      << "For more details see: tes3_ri_help.txt\n\n";
 
             // Wait for user input before exiting (Windows)
         #ifndef __linux__
