@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
                     << std::quoted(jsonImportPath.string());
 
             if (std::system(convCmd.str().c_str()) != 0) {
-                logMessage("ERROR - converting to .JSON failed for file: " + pluginImportPath.string(), logFile);
+                logMessage("ERROR - converting to .JSON failed for file: " + pluginImportPath.string() + "\n", logFile);
                 continue;
             }
             if (!options.silentMode) {
@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
             // Load the generated JSON file
             std::ifstream inputFile(jsonImportPath, std::ios::binary);
             if (!inputFile.is_open()) {
-                logMessage("ERROR - failed to open JSON file: " + jsonImportPath.string(), logFile);
+                logMessage("ERROR - failed to open JSON file: " + jsonImportPath.string() + "\n", logFile);
                 continue;
             }
 
@@ -120,12 +120,12 @@ int main(int argc, char* argv[]) {
                 inputFile >> inputData;
 
                 if (inputData.is_discarded()) {
-                    logMessage("ERROR - parsed JSON is invalid or empty: " + jsonImportPath.string(), logFile);
+                    logMessage("ERROR - parsed JSON is invalid or empty: " + jsonImportPath.string() + "\n", logFile);
                     continue;
                 }
             }
             catch (const std::exception& e) {
-                logMessage("ERROR - failed to parse JSON (" + jsonImportPath.string() + "): " + e.what(), logFile);
+                logMessage("ERROR - failed to parse JSON (" + jsonImportPath.string() + "): " + e.what() + "\n", logFile);
                 continue;
             }
 
@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
             auto [isValid, validMasters] = checkDependencyOrder(inputData, logFile);
             if (!isValid) {
                 std::filesystem::remove(jsonImportPath);
-                logMessage("ERROR - required Parent Master not found for file: " + pluginImportPath.string() + " - conversion skipped...", logFile);
+                logMessage("ERROR - required Parent Masters not found for file: " + pluginImportPath.string() + " - conversion skipped...", logFile);
                 if (options.silentMode) {
                     logMessage("", logFile);
                 }
@@ -174,7 +174,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (processReplacementsAndMismatches(db, options, dbQuery, inputData, options.conversionType, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
-                logMessage("ERROR - processing failed for file: " + pluginImportPath.string(), logFile);
+                logMessage("ERROR - processing failed for file: " + pluginImportPath.string() + "\n", logFile);
                 continue;
             }
 
@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
 
             // Add conversion tag to header
             if (!addConversionTag(inputData, convPrefix, options, logFile)) {
-                logMessage("ERROR - could not find or modify header description", logFile);
+                logMessage("ERROR - could not find or modify header description\n", logFile);
                 continue;
             }
 
@@ -210,7 +210,7 @@ int main(int argc, char* argv[]) {
             std::filesystem::path jsonExportPath = pluginImportPath.parent_path() / newJsonName;
 
             if (!saveJsonToFile(jsonExportPath, inputData, options, logFile)) {
-                logMessage("ERROR - failed to save modified data to .JSON file: " + jsonExportPath.string(), logFile);
+                logMessage("ERROR - failed to save modified data to .JSON file: " + jsonExportPath.string() + "\n", logFile);
                 continue;
             }
 
@@ -226,7 +226,7 @@ int main(int argc, char* argv[]) {
 
             // Save converted file with original name
             if (!convertJsonToEsp(jsonExportPath, pluginImportPath, logFile)) {
-                logMessage("ERROR - failed to convert .JSON back to .ESP|ESM: " + pluginImportPath.string(), logFile);
+                logMessage("ERROR - failed to convert .JSON back to .ESP|ESM: " + pluginImportPath.string() + "\n", logFile);
                 continue;
             }
 
@@ -251,7 +251,7 @@ int main(int argc, char* argv[]) {
             auto fileEnd = std::chrono::high_resolution_clock::now();
             auto fileDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileEnd - fileStart);
 
-            logMessage("ERROR - failed to process file " + pluginImportPath.string() + ": " + e.what(), logFile);
+            logMessage("ERROR - failed to process file " + pluginImportPath.string() + ": " + e.what() + "\n", logFile);
 
             // Clear data in case of error
             validMastersIn.clear();

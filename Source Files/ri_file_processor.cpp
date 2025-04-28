@@ -33,7 +33,7 @@ std::pair<bool, std::unordered_set<int>> checkDependencyOrder(const ordered_json
         });
 
     if (headerIter == inputData.end() || !headerIter->contains("masters")) {
-        logMessage("ERROR - missing 'header' section or 'masters' key!", logFile);
+        logMessage("ERROR - missing 'header' section or 'masters' key!\n", logFile);
         return { false, {} };
     }
 
@@ -143,7 +143,7 @@ bool createBackup(const std::filesystem::path& filePath, const ProgramOptions& o
     }
     catch (const std::exception& e) {
         // Log any errors that occur during backup process
-        logMessage("ERROR - failed to create backup: " + filePath.string() + ": " + e.what(), logFile);
+        logMessage("ERROR - failed to create backup: " + filePath.string() + ": " + e.what() + "\n", logFile);
         return false;
     }
 }

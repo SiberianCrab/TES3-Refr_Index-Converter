@@ -88,7 +88,7 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
 
     // Validate root JSON structure
     if (!inputData.is_array()) {
-        logMessage("\nERROR - input JSON is not an array, unable to process!", logFile);
+        logMessage("ERROR - input JSON is not an array, unable to process!", logFile);
         return -1;
     }
 
@@ -161,8 +161,10 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
                 // Handle duplicated mismatches
                 if (auto [it, inserted] = mismatchedEntries.insert(
                     MismatchEntry{ inputRefIndex, inputId, idDb, refrIndexDb }); !inserted) {
-                    logMessage("WARNING - skipping duplicate mismatch entry for JSON refr_index " + std::to_string(inputRefIndex) +
-                               " and JSON id " + inputId, logFile);
+                    if (!options.silentMode) {
+                        logMessage("WARNING - skipping duplicate mismatch entry for JSON refr_index " + std::to_string(inputRefIndex) +
+                                   " and JSON id " + inputId, logFile);
+                    }
                 }
             }
         }
@@ -195,7 +197,9 @@ int processReplacementsAndMismatches(const Database& db, const ProgramOptions& o
             }
         }
         else {
-            logMessage("Mismatched entries will remain unchanged...", logFile);
+            if (!options.silentMode) {
+                logMessage("Mismatched entries will remain unchanged...", logFile);
+            }
         }
     }
     else {
