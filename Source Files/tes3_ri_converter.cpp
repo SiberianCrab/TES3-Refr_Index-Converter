@@ -169,17 +169,9 @@ int main(int argc, char* argv[]) {
                 : "SELECT refr_index_RU FROM [tes3_T-B_en-ru_refr_index] WHERE refr_index_EN = ? AND id = ?;";
 
             // Process replacements and mismatches
-            if (!options.silentMode) {
-                logMessage("", logFile);
-            }
-
             if (processReplacementsAndMismatches(db, options, dbQuery, inputData, options.conversionType, replacementsFlag, validMasters, mismatchedEntries, logFile) == -1) {
                 logMessage("ERROR - processing failed for file: " + pluginImportPath.string() + "\n", logFile);
                 continue;
-            }
-
-            if (!options.silentMode) {
-                logMessage("", logFile);
             }
 
             // Check if any replacements were made
@@ -243,7 +235,7 @@ int main(int argc, char* argv[]) {
             auto fileDuration = fileEnd - fileStart;
             auto seconds = std::chrono::duration<double>(fileDuration).count();
             if (!options.silentMode) {
-                logMessage(std::format("\nFile processed in: {:.3f} seconds", seconds), logFile);
+                logMessage(std::format("\nFile converted in: {:.3f} seconds\n", seconds), logFile);
             }
         }
         catch (const std::exception& e) {

@@ -37,7 +37,11 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
                       << "TES3 Refr_Index Converter - Help\n"
                       << "================================\n\n"
                       << "Usage:\n"
+            #ifdef _WIN32
                       << "  .\\tes3_ri_converter.exe [OPTIONS] \"[TARGETS]\"\n\n"
+            #else
+                      << "  ./tes3_ri_converter [OPTIONS] \"[TARGETS]\"\n\n"
+            #endif
                       << "Options:\n"
                       << "  -b, --batch      Enable batch mode (required when processing multiple files)\n"
                       << "  -s, --silent     Suppress non-critical messages (faster conversion)\n"
@@ -47,13 +51,26 @@ ProgramOptions parseArguments(int argc, char* argv[]) {
                       << "Target Formats:\n\n"
                       << "  Single File (works without batch mode):\n"
                       << "    mod-in-the-same-folder.esp\n"
+            #ifdef _WIN32
                       << "    C:\\Morrowind\\Data Files\\mod.esm\n\n"
+            #else
+                      << "    /home/user/morrowind/Data Files/mod.esm\n\n"
+            #endif
                       << "  Multiple Files (requires -b batch mode):\n"
                       << "    file1.esp;file2.esm;file 3.esp\n"
+            #ifdef _WIN32
                       << "    D:\\Mods\\mod.esp;C:\\Morrowind\\Data Files\\Master mod.esm;Mod-in-the-same-folder.esp\n\n"
+            #else
+                      << "    /mnt/data/mods/file1.esp;/home/user/morrowind/Data Files/Master mod.esm;mod-in-the-same-folder.esp\n\n"
+            #endif
                       << "  Entire Directory (batch mode, recursive processing):\n"
+            #ifdef _WIN32
                       << "    C:\\Morrowind\\Data Files\\\n"
                       << "    .\\Data\\  (relative path)\n\n\n"
+            #else
+                      << "    /home/user/morrowind/Data Files/\n"
+                      << "    ./Data/  (relative path)\n\n\n"
+            #endif
                       << "For more details see: tes3_ri_help.txt\n\n";
 
             // Wait for user input before exiting (Windows)

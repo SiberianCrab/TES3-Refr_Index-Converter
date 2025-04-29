@@ -137,7 +137,7 @@ bool createBackup(const std::filesystem::path& filePath, const ProgramOptions& o
         // Perform the actual backup by renaming the file
         std::filesystem::rename(filePath, backupPath);
         if (!options.silentMode) {
-            logMessage("Original file backed up as: " + backupPath.string() + "\n", logFile);
+            logMessage("Original file backed up as: " + backupPath.string(), logFile);
         }
         return true;
     }
@@ -154,7 +154,7 @@ bool saveJsonToFile(const std::filesystem::path& jsonImportPath, const ordered_j
     if (!outputFile) return false;
     outputFile << std::setw(2) << inputData;
     if (!options.silentMode) {
-        logMessage("\nModified data saved as: " + jsonImportPath.string() + "\n", logFile);
+        logMessage("Modified data saved as: " + jsonImportPath.string(), logFile);
     }
     return true;
 }
@@ -170,6 +170,6 @@ bool convertJsonToEsp(const std::filesystem::path& jsonImportPath, const std::fi
         return false;
     }
 
-    logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string() + "\n", logFile);
+    logMessage("Conversion to .ESP|ESM successful: " + espFilePath.string(), logFile);
     return true;
 }
