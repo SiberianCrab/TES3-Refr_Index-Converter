@@ -5,7 +5,7 @@
  Requires the latest version of tes3conv.exe from Greatness7 (https://github.com/Greatness7/tes3conv) to run.
 
 Usage:
-  Windows 
+  Windows
     .\tes3_ri_converter.exe [OPTIONS] "[TARGETS]"
   
   Linux
