@@ -28,7 +28,7 @@ Requires the latest version of `tes3conv.exe` from Greatness7: [https://github.c
 | `-s`, `--silent`   | Suppress non-critical messages (faster conversion)        |
 | `-1`, `--ru-to-en` | Convert Russian 1C → English GOTY                        |
 | `-2`, `--en-to-ru` | Convert English GOTY → Russian 1C                        |
-| `-h`, `--help`     | Show this help message                                  |
+| `-h`, `--help`     | Show help message                                  |
 
 ---
 
