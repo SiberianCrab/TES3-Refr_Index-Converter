@@ -14,7 +14,7 @@ Options:
   -s, --silent     Suppress non-critical messages (faster conversion)
   -1, --ru-to-en   Convert Russian 1C -> English GOTY
   -2, --en-to-ru   Convert English GOTY -> Russian 1C
-  -h, --help       Show this help message
+  -h, --help       Show help message
 
 Target Formats:
 
