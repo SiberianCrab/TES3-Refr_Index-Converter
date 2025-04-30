@@ -6,6 +6,14 @@ Requires the latest version of `tes3conv.exe` from Greatness7: [https://github.c
 
 ---
 
+Since the release of the Russian version of Morrowind (published by 1C), there has been an incompatibility issue between English and Russian mods that modify objects in the Tribunal and Bloodmoon expansions.
+
+When using mods designed for the other version of the game, affected objects become duplicated. This occurs due to differences in Refr_Index values (object identifiers) between the English (GOTY) and Russian (1C) versions. For example:
+
+https://pic.fullrest.ru/XYIDAKc9.png
+
+---
+
 ## Usage
 
 ### Windows
