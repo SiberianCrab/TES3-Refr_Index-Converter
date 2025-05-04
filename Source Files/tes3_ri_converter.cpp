@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
             }
 
             // Save converted file with original name
-            if (!convertJsonToEsp(jsonExportPath, pluginImportPath, logFile)) {
+            if (!convertJsonToEsp(jsonExportPath, pluginImportPath, options, logFile)) {
                 logMessage("ERROR - failed to convert .JSON back to .ESP|ESM: " + pluginImportPath.string() + "\n", logFile);
                 continue;
             }
